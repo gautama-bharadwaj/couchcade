@@ -14,7 +14,114 @@ const PHASE_LABEL = {
   end: '',
 };
 
+// Narration: a dramatic host reads out what happened. Lines are random so games don't repeat.
+const LINES = {
+  intro: [
+    'Welcome, honored guests, to the Midnight Gala. Check your phones… and keep them hidden.',
+    'Good evening. Tonight, someone at this party is not who they claim to be.',
+    'Welcome to the Midnight Gala. The jewels are on display. Some of you are here to take them.',
+  ],
+  night: [
+    'Night falls on the mansion. Choose your room… and trust no one.',
+    'The lights go out. Slip away to a room of your choosing.',
+    'Midnight. The halls are dark, and somewhere a door creaks open.',
+    'Darkness falls. Pick your room quietly.',
+  ],
+  quiet: ['Morning comes, and every gem is accounted for. Suspicious.', 'A quiet night. Too quiet.', 'Dawn breaks. Nothing was taken… this time.'],
+  talk: ['Discuss. Who among you is lying?', 'Speak up. Share what you saw, or what you want them to think you saw.', 'The floor is open. Accuse, defend, deceive.'],
+  vote: ['The time for talk is over. Cast your votes.', 'Vote now. Choose wisely.', 'Lock in your votes. They will all be revealed together.'],
+  nobody: ['Nobody leaves tonight.', 'The guests cannot agree. Everyone stays.', 'No one is escorted out. The thieves breathe easier.'],
+};
+
+let lastSpokenTick = -1;
+
 export default {
+  // Sounds and narration for state changes (see public/tv/audio.js).
+  onSnapshot(prev, s, audio) {
+    const { sfx, say, pick } = audio;
+    const name = (id) => s.players.find((p) => p.id === id)?.name ?? 'Someone';
+    const room = (id) => s.rooms.find((r) => r.id === id)?.label ?? id;
+    const entered = !prev || prev.phase !== s.phase;
+
+    // Countdown ticks in the last 10 seconds of timed choices.
+    if (prev && s.left !== prev.left && s.left <= 10 && s.left > 0 && ['night', 'vote', 'lastGuess', 'talk'].includes(s.phase) && s.left !== lastSpokenTick) {
+      lastSpokenTick = s.left;
+      sfx.tick();
+    }
+
+    if (!entered) {
+      if (s.gossip.length > (prev.gossip?.length ?? 0)) {
+        sfx.whisper();
+        say(`A whisper: ${s.gossip.at(-1)}`, { rate: 0.85, pitch: 1.2, delay: 0.4 });
+      }
+      return;
+    }
+
+    audio.ambience(s.phase === 'night' || s.phase === 'intro' ? 'night' : null);
+
+    switch (s.phase) {
+      case 'intro':
+        sfx.clockChime();
+        say(pick(LINES.intro), { delay: 1.5 });
+        break;
+      case 'night':
+        sfx.doorCreak();
+        say(s.night === s.maxNights ? 'The final night. Dawn is coming. Choose your room.' : pick(LINES.night), { interrupt: true, delay: 0.3 });
+        break;
+      case 'reveal': {
+        const last = s.last;
+        const lines = [];
+        if (last?.stolen.length) {
+          sfx.sting();
+          const rooms = [...new Set(last.stolen)].map(room);
+          lines.push(`Morning. ${last.stolen.length === 1 ? 'A gem is' : `${last.stolen.length} gems are`} missing from the ${rooms.join(' and the ')}.`);
+          if (s.gems >= s.gemsToWin - 1) lines.push('The thieves are one gem away.');
+        } else {
+          sfx.chime();
+          lines.push(pick(LINES.quiet));
+        }
+        for (const f of last?.foiled ?? []) lines.push(`A theft was foiled in the ${room(f)}. Someone is getting sloppy.`);
+        if (last?.evidence) lines.push('And someone found a glove…');
+        say(lines.join(' '), { interrupt: true, delay: 0.5 });
+        break;
+      }
+      case 'talk':
+        say(pick(LINES.talk), { delay: 0.2 });
+        break;
+      case 'vote':
+        sfx.beep();
+        say(pick(LINES.vote), { interrupt: true });
+        break;
+      case 'verdict': {
+        const v = s.verdict;
+        if (!v || v.nobody) {
+          sfx.buzz();
+          say(pick(LINES.nobody), { interrupt: true });
+          break;
+        }
+        sfx.drumroll(2.2);
+        say(`${name(v.id)} is escorted out…`, { interrupt: true });
+        const role = s.roleInfo[v.role]?.label ?? v.role;
+        const article = ['thief', 'guest'].includes(v.role) ? 'a' : 'the';
+        setTimeout(() => {
+          if (v.wasThief) sfx.sting();
+          else sfx.sadTrombone();
+        }, 2400);
+        say(v.wasThief ? `…and was ${article} ${role}! Well done.` : `…and was ${article} ${role}. Oops.`, { delay: 2.6, pitch: v.wasThief ? 0.8 : 1 });
+        break;
+      }
+      case 'lastGuess':
+        sfx.sting();
+        say(`${name(s.lastGuessBy)} was the last thief. But if they can name the Detective, the thieves still win.`, { interrupt: true });
+        break;
+      case 'end':
+        if (s.winner === 'thieves') sfx.evil();
+        else sfx.fanfare();
+        say(`${s.winner === 'thieves' ? 'The thieves win.' : 'The guests win!'} ${s.winReason}`, { interrupt: true, delay: 1 });
+        break;
+    }
+  },
+
   draw(ctx, { cur: s, arena, now }) {
     const W = arena.w;
     const H = arena.h;

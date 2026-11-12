@@ -48,6 +48,7 @@ export default {
     let solo = false;
     let lastRound = false; // decided when a round ends; the match ends after its roundover screen
     let matchDone = false;
+    let fx = { bumps: [], dashes: 0 }; // this tick's events, for TV sound effects
 
     startRound();
 
@@ -117,7 +118,8 @@ export default {
 
       // Input -> velocity
       for (const [id, b] of live) {
-        const input = players.get(id)?.input ?? { x: 0, y: 0, a: false };
+        const p = players.get(id);
+        const input = p?.bot ? botInput(b, live, now) : p?.input ?? { x: 0, y: 0, a: false };
         b.vx += input.x * ACCEL * dt;
         b.vy += input.y * ACCEL * dt;
 
@@ -137,6 +139,7 @@ export default {
             b.vy += (dy / len) * DASH_SPEED;
             b.dashUntil = now + DASH_MS;
             b.dashReadyAt = now + DASH_COOLDOWN_MS;
+            fx.dashes++;
           }
         }
         b.prevA = input.a;
@@ -183,6 +186,32 @@ export default {
       }
     }
 
+    // Simple bot: chase the nearest rival and dash when close, but head back to the middle near the edge.
+    function botInput(b, live, now) {
+      if (!b.bot) b.bot = { wobble: Math.random() * Math.PI * 2, reactAt: 0, x: 0, y: 0, a: false };
+      const st = b.bot;
+      if (now < st.reactAt) return { x: st.x, y: st.y, a: false }; // human-ish reaction time
+      st.reactAt = now + 120 + Math.random() * 180;
+      const fromC = Math.hypot(b.x - cx, b.y - cy);
+      let tx;
+      let ty;
+      if (fromC > platformR * 0.72) {
+        tx = cx - b.x;
+        ty = cy - b.y;
+      } else {
+        const target = live.map(([, o]) => o).filter((o) => o !== b).sort((p, q) => Math.hypot(p.x - b.x, p.y - b.y) - Math.hypot(q.x - b.x, q.y - b.y))[0];
+        if (!target) return { x: 0, y: 0, a: false };
+        st.wobble += 0.4;
+        tx = target.x - b.x + Math.cos(st.wobble) * 40;
+        ty = target.y - b.y + Math.sin(st.wobble) * 40;
+        st.a = Math.hypot(target.x - b.x, target.y - b.y) < 140 && Math.random() < 0.35;
+      }
+      const len = Math.hypot(tx, ty) || 1;
+      st.x = tx / len;
+      st.y = ty / len;
+      return { x: st.x, y: st.y, a: fromC > platformR * 0.72 ? false : st.a };
+    }
+
     function collide(a, b, now) {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -205,6 +234,8 @@ export default {
       const aPow = now < a.dashUntil ? DASH_POWER : 1;
       const bPow = now < b.dashUntil ? DASH_POWER : 1;
       // A dashing hitter knocks the other one back harder.
+      // power 0..1 for the TV's thud volume
+      fx.bumps.push({ x: Math.round((a.x + b.x) / 2), y: Math.round((a.y + b.y) / 2), power: Math.min(1, (vn * Math.max(aPow, bPow)) / 900) });
       a.vx -= nx * (j + BUMP) * bPow;
       a.vy -= ny * (j + BUMP) * bPow;
       b.vx += nx * (j + BUMP) * aPow;
@@ -225,7 +256,10 @@ export default {
 
       snapshot() {
         const now = Date.now();
+        const events = fx;
+        fx = { bumps: [], dashes: 0 };
         return {
+          fx: events,
           phase,
           timer: Math.max(0, Math.ceil(timer)),
           round,

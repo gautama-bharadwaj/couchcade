@@ -7,6 +7,66 @@ let lastSeq = 0;
 let flipAt = 0;
 
 export default {
+  // Sounds and narration for state changes (see public/tv/audio.js).
+  onSnapshot(prev, s, audio) {
+    const { sfx, say, pick } = audio;
+    if (!prev) {
+      sfx.shuffle(6);
+      say(pick(['Shuffle up and deal!', "Cards are dealt. Let's shed!", 'Seven cards each. First to empty their hand wins.']), { delay: 0.8 });
+      return;
+    }
+    const byId = new Map(s.players.map((p) => [p.id, p]));
+    const prevById = new Map(prev.players.map((p) => [p.id, p]));
+
+    // A card was played.
+    const played = s.lastPlayed && s.lastPlayed.seq !== prev.lastPlayed?.seq ? s.lastPlayed.card : null;
+    if (played) {
+      sfx.swish();
+      if (played.kind === 'skip') setTimeout(sfx.buzz, 120);
+      if (played.kind === 'reverse') setTimeout(sfx.whoosh, 120);
+      if (played.kind === 'wild') setTimeout(sfx.chime, 120);
+      if (played.kind === 'draw2' || played.kind === 'wild4') {
+        setTimeout(() => sfx.danger(s.pending / 2), 120);
+        if (s.pending >= 6 && s.pending > (prev.pending ?? 0)) say(s.pending >= 10 ? `Plus ${s.pending}! This is getting ugly.` : `The stack is at ${s.pending}!`, { interrupt: true });
+      }
+    }
+
+    // Cards drawn (anyone's hand grew without a play); a big stack landing gets a thud.
+    let drawn = 0;
+    for (const p of s.players) drawn += Math.max(0, p.cards - (prevById.get(p.id)?.cards ?? p.cards));
+    if (drawn) {
+      sfx.shuffle(drawn);
+      if (drawn >= 4) {
+        sfx.thud(Math.min(1, drawn / 8));
+        const victim = s.players.find((p) => p.cards - (prevById.get(p.id)?.cards ?? 0) === drawn);
+        if (victim && !s.log.at(-1)?.includes('caught')) say(`${victim.name} takes ${drawn}. Ouch.`);
+      }
+    }
+
+    // "Last card!" calls and catches.
+    for (const p of s.players) {
+      if (p.called && !prevById.get(p.id)?.called) {
+        sfx.beep(true);
+        say(`${p.name}: last card!`, { rate: 1.1, pitch: 1.1 });
+      }
+    }
+    const newLine = s.log.at(-1) !== prev.log.at(-1) ? s.log.at(-1) : null;
+    if (newLine?.includes(' caught ')) {
+      sfx.alarm();
+      say(`Caught! ${newLine.split(' caught ')[1].replace(/, who draws (\d+)/, ' draws $1')}.`, { interrupt: true });
+    }
+
+    // Turn changes and the clock.
+    if (s.turn && s.turn !== prev.turn) sfx.click();
+    if (s.turn && s.left !== prev.left && s.left <= 5 && s.left > 0) sfx.tick();
+    if (s.dir !== prev.dir && !played) sfx.whoosh();
+
+    if (s.winner && !prev.winner) {
+      sfx.fanfare();
+      say(`${byId.get(s.winner)?.name ?? 'Someone'} is out of cards and wins!`, { interrupt: true, delay: 0.4 });
+    }
+  },
+
   draw(ctx, { cur: s, arena, now }) {
     const W = arena.w;
     const H = arena.h;

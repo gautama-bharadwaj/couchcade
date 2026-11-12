@@ -164,6 +164,7 @@ $('endBtn').addEventListener('click', () => cmd({ t: 'end' }));
 // --- Game screens (turn-based games) ---------------------------------------------
 // Rebuilt only when the screen JSON changes, so a half-typed message survives the 10/s updates.
 let lastScreen = null;
+let lastTitle = null;
 function renderScreen(screen) {
   // The footer (often a countdown) updates in place, so ticking timers don't rebuild the
   // buttons under someone's thumb.
@@ -171,6 +172,9 @@ function renderScreen(screen) {
   const json = JSON.stringify(screen ? { ...screen, footer: undefined } : null);
   if (json === lastScreen) return;
   lastScreen = json;
+  // A gentle buzz when a new screen appears (your turn, a new night…). Android only.
+  if (screen?.title && screen.title !== lastTitle) navigator.vibrate?.(35);
+  lastTitle = screen?.title;
   const body = $('screenBody');
   const typed = body.querySelector('input')?.value ?? '';
   const typedKey = body.querySelector('input')?.dataset.key;
