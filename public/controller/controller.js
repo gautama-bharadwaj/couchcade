@@ -228,7 +228,7 @@ function renderScreen(screen) {
     const hand = el('div', 'hand');
     for (const c of cards) {
       const b = el('button', `pcard${c.color ? '' : ' wild'}`);
-      if (c.color) b.style.background = c.color;
+      if (c.color) b.style.setProperty('--card', c.color);
       b.append(document.createTextNode(c.label));
       if (c.small) b.append(el('small', '', c.small));
       b.disabled = c.playable === false;

@@ -81,32 +81,43 @@ function seat(ctx, p, x, y, isTurn, isWinner, now) {
   ctx.globalAlpha = 1;
 }
 
+// Card face: dark body, colored frame, big centered symbol and corner indexes.
+// Wilds show four color bars along the bottom and take the chosen color as their frame.
+const WILD_BARS = ['#e8484d', '#2f8fe6', '#2fb866', '#e6a817'];
 function card(ctx, c, colors, x, y, scale, activeColor) {
   const w = 150 * scale;
   const h = 214 * scale;
+  const hex = (id) => colors.find((k) => k.id === id)?.hex;
+  const ink = c.color ? hex(c.color) : '#f2f4f8';
+  const frame = c.color ? ink : activeColor ? hex(activeColor) : '#f2f4f8';
   ctx.save();
   ctx.translate(x, y);
-  roundRect(ctx, -w / 2, -h / 2, w, h, 16 * scale);
-  if (c.color) ctx.fillStyle = colors.find((k) => k.id === c.color).hex;
-  else {
-    // Wilds: four quarters, with the chosen color as a ring.
-    const q = ctx.createConicGradient(0, 0, 0);
-    ['#e8484d', '#2f8fe6', '#2fb866', '#e6a817'].forEach((hex, i) => {
-      q.addColorStop(i / 4, hex);
-      q.addColorStop((i + 1) / 4 - 0.0001, hex);
-    });
-    ctx.fillStyle = q;
-  }
+  roundRect(ctx, -w / 2, -h / 2, w, h, 14 * scale);
+  ctx.fillStyle = '#141824';
   ctx.fill();
-  ctx.lineWidth = 8 * scale;
-  ctx.strokeStyle = !c.color && activeColor ? colors.find((k) => k.id === activeColor).hex : '#fff';
+  ctx.lineWidth = 10 * scale;
+  ctx.strokeStyle = frame;
   ctx.stroke();
-  ctx.beginPath();
-  ctx.ellipse(0, 0, w * 0.36, h * 0.38, -0.5, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,.92)';
-  ctx.fill();
-  text(ctx, c.label, 0, 22 * scale, { size: 72 * scale, weight: 900, color: c.color ? colors.find((k) => k.id === c.color).hex : '#222' });
-  if (c.small) text(ctx, c.small.toUpperCase(), 0, h / 2 - 16 * scale, { size: 16 * scale, weight: 800, color: '#fff' });
+  // inner hairline
+  roundRect(ctx, -w / 2 + 14 * scale, -h / 2 + 14 * scale, w - 28 * scale, h - 28 * scale, 8 * scale);
+  ctx.lineWidth = 2 * scale;
+  ctx.strokeStyle = frame + '66';
+  ctx.stroke();
+  if (!c.color) {
+    const bw = (w - 44 * scale) / 4;
+    WILD_BARS.forEach((bar, i) => {
+      ctx.fillStyle = bar;
+      ctx.fillRect(-w / 2 + 22 * scale + i * bw, h / 2 - 50 * scale, bw - 4 * scale, 18 * scale);
+    });
+  }
+  text(ctx, c.label, 0, 26 * scale, { size: 78 * scale, weight: 900, color: ink });
+  text(ctx, c.label, -w / 2 + 24 * scale, -h / 2 + 42 * scale, { size: 22 * scale, weight: 900, color: ink, align: 'left' });
+  ctx.save();
+  ctx.rotate(Math.PI);
+  text(ctx, c.label, -w / 2 + 24 * scale, -h / 2 + 42 * scale, { size: 22 * scale, weight: 900, color: ink, align: 'left' });
+  ctx.restore();
+  if (c.small && c.color) text(ctx, c.small.toUpperCase(), 0, 62 * scale, { size: 15 * scale, weight: 800, color: ink });
+  if (c.small && !c.color) text(ctx, c.label === '+4' ? 'WILD DRAW 4' : 'WILD', 0, 62 * scale, { size: 15 * scale, weight: 800, color: ink });
   ctx.restore();
 }
 
