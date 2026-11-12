@@ -106,3 +106,7 @@ The lobby, joining, reconnects, host controls, phone layout and results screen a
 - [x] Shed! (color-matching card game)
 - [ ] M4 Polish: sounds, keep phones awake, Draw & Guess
 - [ ] M5 Raspberry Pi
+
+## License
+
+MIT. See [LICENSE](LICENSE).

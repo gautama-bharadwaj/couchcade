@@ -2,6 +2,7 @@
   "name": "couchcade",
   "version": "0.1.0",
   "description": "Couchcade: living-room party games on the big screen, phones as controllers",
+  "license": "MIT",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
