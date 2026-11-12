@@ -4,6 +4,7 @@
 // Register new games here with the same id as server/games/<id>.js.
 
 import bumper from './bumper.js';
+import gala from './gala.js';
 import sandbox from './sandbox.js';
 
-export const renderers = { bumper, sandbox };
+export const renderers = { bumper, gala, sandbox };

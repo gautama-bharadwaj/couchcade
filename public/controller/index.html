@@ -58,7 +58,7 @@
     body.playing #hud { display: flex; }
     #hudStatus { color: var(--muted); font-weight: 500; }
     #endBtn { position: fixed; right: max(12px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: none; font-size: .85rem; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); }
-    body.playing.host #endBtn { display: block; }
+    body.playing.host #endBtn, body.screens.host #endBtn { display: block; }
 
     /* Results */
     #results { flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
@@ -67,11 +67,33 @@
     #resList li { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; }
     #resList li b { margin-left: auto; }
 
+    /* Game screens (turn-based games): portrait, scrollable, built from the game's playerView().screen */
+    #screen { flex-direction: column; gap: 12px; overflow-y: auto; padding-top: max(44px, env(safe-area-inset-top)); }
+    #screen h2 { margin: 0; font-size: 1.6rem; font-weight: 900; }
+    #screen .tag { align-self: flex-start; padding: 4px 12px; border-radius: 999px; font-weight: 800; color: #0d0f14; background: var(--accent); }
+    #screen p { margin: 0; font-size: 1.1rem; line-height: 1.35; }
+    #screen .cards { display: grid; gap: 8px; }
+    #screen .card { padding: 10px 14px; border-radius: 12px; background: var(--panel); border-left: 6px solid var(--line); }
+    #screen .opts { display: grid; gap: 8px; }
+    #screen .opt { text-align: left; padding: 14px 16px; border-radius: 14px; border: 2px solid var(--line); background: var(--panel); color: inherit; display: flex; align-items: center; gap: 10px; }
+    #screen .opt.sel { border-color: var(--accent); background: #1d2333; }
+    #screen .opt:disabled { opacity: .4; }
+    #screen .opt.locked:not(.sel) { opacity: .5; }
+    #screen .t { font-weight: 800; font-size: 1.1rem; }
+    #screen .d { color: var(--muted); font-size: .92rem; margin-top: 2px; }
+    #screen .row { display: flex; gap: 8px; }
+    #screen .row input { flex: 1; min-width: 0; font-size: 1.1rem; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: inherit; user-select: text; -webkit-user-select: text; }
+    #screen .acts { display: grid; gap: 8px; }
+    #screen .secondaryBtn { font-size: 1.1rem; font-weight: 700; padding: 12px 20px; border-radius: 14px; border: 1px solid var(--line); background: transparent; color: inherit; }
+    #screen button:disabled { opacity: .4; }
+    #screenFooter { min-height: 1.2em; }
+    body.screens #hud { display: flex; }
+
     #conn { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: .8rem; color: var(--muted); pointer-events: none; }
 
     /* Ask for landscape while playing */
     #rotate { position: fixed; inset: 0; display: none; place-items: center; background: #0d0f14; font-size: 1.3rem; text-align: center; padding: 24px; z-index: 10; }
-    @media (orientation: portrait) { body.playing #rotate { display: grid; } }
+    @media (orientation: portrait) { body.playing:not(.screens) #rotate { display: grid; } }
   </style>
 </head>
 <body>
@@ -97,6 +119,11 @@
       <div id="stickKnob"></div>
     </div>
     <div id="buttons"></div>
+  </section>
+
+  <section id="screen" class="screen">
+    <div id="screenBody"></div>
+    <div id="screenFooter" class="muted"></div>
   </section>
 
   <section id="results" class="screen">

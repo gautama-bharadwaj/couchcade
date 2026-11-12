@@ -98,6 +98,7 @@ function notFound(res) {
 //   client -> server  {t:'hello', role:'tv'}
 //                     {t:'hello', role:'player', name, token?}
 //                     {t:'input', x, y, a, b}               players, ~30/s
+//                     {t:'act', key, value?}                players, screens games only
 //                     {t:'select', gameId} {t:'start'} {t:'end'}   host phone or TV only
 //                     {t:'ping', at}
 //   server -> player  {t:'welcome', id, token, name, color} | {t:'full'}
@@ -150,6 +151,10 @@ wss.on('connection', (ws, req) => {
 
       case 'input':
         if (ws.role === 'player') lobby.setInput(ws.playerId, msg);
+        break;
+
+      case 'act':
+        if (ws.role === 'player' && session.action(ws.playerId, msg)) pushViews();
         break;
 
       case 'select':
@@ -210,18 +215,21 @@ setInterval(() => {
   if (state) broadcastTv({ ...state, tick });
 
   // Per-player phone updates at ~10/s.
-  if (state && tick % 3 === 0) {
-    for (const c of wss.clients) {
-      if (c.role !== 'player') continue;
-      const data = session.playerView(c.playerId);
-      if (data) send(c, { t: 'you', data });
-    }
-  }
+  if (state && tick % 3 === 0) pushViews();
 }, 1000 / TICK_HZ);
+
+function pushViews() {
+  for (const c of wss.clients) {
+    if (c.role !== 'player') continue;
+    const data = session.playerView(c.playerId);
+    if (data) send(c, { t: 'you', data });
+  }
+}
 
 // Housekeeping: drop long-gone players, kill dead sockets.
 setInterval(() => {
-  if (lobby.prune().length) session.changed();
+  // Mid-game, keep everyone's seat (long turn-based games), so prune only outside games.
+  if (session.phase !== 'playing' && lobby.prune().length) session.changed();
   for (const ws of wss.clients) {
     if (!ws.isAlive) {
       ws.terminate();

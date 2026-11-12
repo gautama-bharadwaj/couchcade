@@ -1,5 +1,7 @@
 // Phone controller. Screens follow the server's phase:
 //   join → lobby (host picks + starts) → pad (joystick + the game's buttons) → results → lobby
+// Turn-based games (controller.type 'screens') show the game's own screen instead of the pad;
+// see "Phone screens" in server/games/index.js.
 // Keeps a token in localStorage so a locked phone rejoins as the same player.
 //
 // Desktop testing: open http://localhost:3000 and use WASD / arrows to move,
@@ -52,6 +54,7 @@ function connect() {
         break;
       case 'you':
         $('hudStatus').textContent = msg.data.status ?? '';
+        if (msg.data.screen !== undefined) renderScreen(msg.data.screen);
         for (const el of document.querySelectorAll('.btn[data-key="a"]')) el.classList.toggle('dim', msg.data.dashReady === false);
         break;
       case 'error':
@@ -86,6 +89,7 @@ function cmd(obj) {
 function show(id) {
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
   document.body.classList.toggle('playing', id === 'pad');
+  document.body.classList.toggle('screens', id === 'screen');
 }
 
 function render() {
@@ -95,6 +99,14 @@ function render() {
   if (phase.phase === 'lobby') {
     show('lobby');
     renderLobby(isHost);
+  } else if (phase.phase === 'playing' && phase.controller?.type === 'screens') {
+    $('hudStatus').textContent = '';
+    if (!document.getElementById('screen').classList.contains('active')) {
+      lastScreen = null;
+      $('screenBody').textContent = 'Starting…';
+      $('screenFooter').textContent = '';
+    }
+    show('screen');
   } else if (phase.phase === 'playing') {
     buildButtons(phase.controller);
     $('hudStatus').textContent = '';
@@ -143,6 +155,104 @@ function renderResults(results) {
 
 $('startBtn').addEventListener('click', () => cmd({ t: 'start' }));
 $('endBtn').addEventListener('click', () => cmd({ t: 'end' }));
+
+// --- Game screens (turn-based games) ---------------------------------------------
+// Rebuilt only when the screen JSON changes, so a half-typed message survives the 10/s updates.
+let lastScreen = null;
+function renderScreen(screen) {
+  const json = JSON.stringify(screen ?? null);
+  if (json === lastScreen) return;
+  lastScreen = json;
+  const body = $('screenBody');
+  const typed = body.querySelector('input')?.value ?? '';
+  const typedKey = body.querySelector('input')?.dataset.key;
+  body.innerHTML = '';
+  $('screenFooter').textContent = screen?.footer ?? '';
+  if (!screen) return;
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const wrap = el('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:12px';
+  body.append(wrap);
+
+  if (screen.title) wrap.append(el('h2', '', screen.title));
+  if (screen.tag) {
+    const t = el('span', 'tag', screen.tag.label);
+    if (screen.tag.color) t.style.background = screen.tag.color;
+    wrap.append(t);
+  }
+  for (const line of screen.lines ?? []) wrap.append(el('p', '', line));
+
+  if (screen.cards?.length) {
+    const cards = el('div', 'cards');
+    for (const c of screen.cards) {
+      const card = el('div', 'card');
+      if (c.color) card.style.borderLeftColor = c.color;
+      card.append(el('div', 't', c.label));
+      if (c.sub) card.append(el('div', 'd', c.sub));
+      cards.append(card);
+    }
+    wrap.append(cards);
+  }
+
+  if (screen.choose) {
+    const { key, options = [], selected, locked } = screen.choose;
+    const opts = el('div', 'opts');
+    for (const o of options) {
+      const b = el('button', `opt${o.id === selected ? ' sel' : ''}${locked ? ' locked' : ''}`);
+      b.disabled = !!o.disabled;
+      if (o.color) b.append(Object.assign(el('span', 'dot'), { style: `background:${o.color}` }));
+      const txt = el('div');
+      txt.append(el('div', 't', o.label));
+      if (o.sub) txt.append(el('div', 'd', o.sub));
+      b.append(txt);
+      if (!locked) b.addEventListener('click', () => act(key, o.id));
+      opts.append(b);
+    }
+    wrap.append(opts);
+  }
+
+  if (screen.input) {
+    const { key, placeholder = '', maxLength = 80, submitLabel = 'Send' } = screen.input;
+    const row = el('div', 'row');
+    const input = el('input');
+    input.dataset.key = key;
+    input.placeholder = placeholder;
+    input.maxLength = maxLength;
+    if (typedKey === key) input.value = typed;
+    const go = el('button', 'primary', submitLabel);
+    const submit = () => {
+      const v = input.value.trim();
+      if (!v) return;
+      act(key, v);
+      input.value = '';
+    };
+    go.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => e.key === 'Enter' && submit());
+    row.append(input, go);
+    wrap.append(row);
+  }
+
+  if (screen.actions?.length) {
+    const acts = el('div', 'acts');
+    for (const a of screen.actions) {
+      const b = el('button', a.style === 'secondary' ? 'secondaryBtn' : 'primary', a.label);
+      b.disabled = !!a.disabled;
+      b.addEventListener('click', () => act(a.key));
+      acts.append(b);
+    }
+    wrap.append(acts);
+  }
+}
+
+function act(key, value) {
+  navigator.vibrate?.(15);
+  cmd(value === undefined ? { t: 'act', key } : { t: 'act', key, value });
+}
 
 // --- Buttons from the game's controller spec ------------------------------------
 let builtFor = null;
@@ -233,7 +343,7 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 
 // --- Keyboard (desktop testing) -----------------------------------------------------
 window.addEventListener('keydown', (e) => {
-  if (document.activeElement === $('name')) return;
+  if (document.activeElement?.tagName === 'INPUT') return;
   keys.add(e.code);
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
@@ -248,7 +358,7 @@ function keyboardInput() {
 
 // --- Send loop -------------------------------------------------------------------------
 setInterval(() => {
-  if (ws?.readyState !== WebSocket.OPEN || phase?.phase !== 'playing') return;
+  if (ws?.readyState !== WebSocket.OPEN || phase?.phase !== 'playing' || phase.controller?.type === 'screens') return;
   const k = keyboardInput();
   const out = k.x || k.y || k.a || k.b ? k : state;
   ws.send(JSON.stringify({ t: 'input', x: +out.x.toFixed(3), y: +out.y.toFixed(3), a: out.a, b: out.b }));

@@ -101,6 +101,15 @@ export class Session {
     return null;
   }
 
+  /** A tap from a phone on a screens game. Returns true if the game took it. */
+  action(id, action) {
+    if (this.phase !== 'playing' || !this.game?.onAction) return false;
+    const player = this.lobby.players.get(id);
+    if (!player || typeof action?.key !== 'string') return false;
+    this.game.onAction(id, { key: action.key.slice(0, 40), value: typeof action.value === 'string' ? action.value.slice(0, 200) : undefined });
+    return true;
+  }
+
   playerView(id) {
     return this.phase === 'playing' && this.game?.playerView ? this.game.playerView(id) : null;
   }

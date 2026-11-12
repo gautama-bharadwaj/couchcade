@@ -33,6 +33,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 | Game | Controls | Notes |
 | --- | --- | --- |
 | **Bumper Arena** | Joystick + Dash | Shove others off a shrinking platform. Last one standing wins the round; first to 3 wins. One player = practice mode. |
+| **Midnight Gala** | Phone screens | Hidden roles for 4–8. Secret Thieves steal gems at night; everyone picks rooms, compares alibis and evidence, and votes people out. Roles: Thief, Detective, Bodyguard (5+), Gossip (6+), Guest. |
 | Sandbox | Joystick + Boost | Steer a dot around. For testing controllers and latency. |
 
 ## Architecture
@@ -69,13 +70,15 @@ public/
 2. `public/tv/games/<id>.js`: export `{ draw(ctx, { prev, cur, alpha, arena, now }) }`.
 3. Register it in `server/games/index.js` and `public/tv/games/index.js`.
 
+Turn-based or hidden-information games use `controller: { type: 'screens' }` instead of buttons. The phone then shows whatever `playerView(id).screen` describes (title, role badge, info cards, a list to pick from, a text box, buttons) and taps come back to the game's `onAction(id, { key, value })`. See "Phone screens" in `server/games/index.js`; Midnight Gala is the example.
+
 The lobby, joining, reconnects, host controls, phone layout and results screen all come for free.
 
 ### Messages
 
 | Direction | Message |
 | --- | --- |
-| phone → server | `hello {role:'player', name, token?}`, `input {x, y, a, b}` (30/s) |
+| phone → server | `hello {role:'player', name, token?}`, `input {x, y, a, b}` (30/s), `act {key, value?}` (screens games) |
 | host phone / TV → server | `select {gameId}`, `start`, `end` |
 | TV → server | `hello {role:'tv'}` |
 | server → everyone | `phase {phase, gameId, games, controller, hostId, players, results}` |
@@ -93,5 +96,8 @@ The lobby, joining, reconnects, host controls, phone layout and results screen a
 - [x] M1 Plumbing: server, QR join, joystick
 - [x] M2 Lobby: host, game picker, start/end, results, reconnect
 - [x] M3 Bumper Arena (first version; tune feel on real phones)
-- [ ] M4 Polish: sounds, keep phones awake, second game (Draw & Guess)
+- [x] Phone screens for turn-based games; players keep their seat for the whole game
+- [x] Midnight Gala (first version; needs a real game night to tune)
+- [ ] Next game: color-matching card game (shedding cards, hands on phones)
+- [ ] M4 Polish: sounds, keep phones awake, Draw & Guess
 - [ ] M5 Raspberry Pi
