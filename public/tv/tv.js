@@ -2,9 +2,10 @@
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
 // Keys (Mac keyboard / later a keyboard on the Pi):
-//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · Esc end game / skip results · F full screen · J join card during a game
+//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · Esc end game / skip results · F full screen · J join card during a game
 
 import { renderers } from './games/index.js';
+import audio from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
@@ -43,6 +44,8 @@ function connect() {
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.t === 'state') {
+      const prevSnap = snapshots.at(-1);
+      onSnapshot(msg, prevSnap?.gameId === msg.gameId ? prevSnap.data : null);
       snapshots.push({ at: performance.now(), gameId: msg.gameId, data: msg.data });
       if (snapshots.length > 10) snapshots.shift();
     } else if (msg.t === 'phase') {
@@ -66,7 +69,9 @@ function sendCmd(obj) {
 // --- Phase screens -------------------------------------------------------------
 function onPhase(msg) {
   const prevPhase = phase?.phase;
+  const prevCount = phase?.players.length ?? 0;
   phase = msg;
+  phaseSounds(prevPhase, msg, prevCount);
   if (msg.phase === 'playing' && prevPhase !== 'playing') snapshots.length = 0;
 
   $('lobby').classList.toggle('show', msg.phase === 'lobby');
@@ -163,9 +168,50 @@ function frame() {
 }
 requestAnimationFrame(frame);
 
+// --- Sound ---------------------------------------------------------------------------
+// Renderers may export onSnapshot(prev, cur, audio) to play sounds when the game state changes.
+function onSnapshot(msg, prevData) {
+  const renderer = renderers[msg.gameId];
+  if (!renderer?.onSnapshot || !audio.isUnlocked()) return;
+  try {
+    renderer.onSnapshot(prevData, msg.data, audio);
+  } catch (err) {
+    console.error('sound hook failed', err);
+  }
+}
+
+function phaseSounds(prevPhase, msg, prevCount) {
+  if (msg.phase !== 'playing') audio.ambience(null);
+  if (msg.phase === 'playing' && prevPhase !== 'playing') audio.sfx.whoosh();
+  if (msg.phase === 'results' && prevPhase !== 'results' && msg.results) {
+    audio.sfx.jingle(); // games announce their own winners
+  }
+  if (msg.phase === 'lobby' && msg.players.length > prevCount && prevPhase) audio.sfx.chime();
+}
+
+function unlockSound() {
+  if (audio.isUnlocked()) return;
+  audio.unlock();
+  $('soundHint').classList.add('hide');
+  showToast(audio.isMuted() ? 'Sound is muted (M to unmute)' : 'Sound on · M mute · N narrator');
+}
+window.addEventListener('pointerdown', unlockSound);
+
+let toastTimer = 0;
+function showToast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
 // --- Keys --------------------------------------------------------------------------
 window.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
+  unlockSound();
+  if (key === 'm') showToast(audio.toggleMute() ? 'Sound muted' : 'Sound on');
+  if (key === 'n') showToast(audio.toggleNarrator() ? 'Narrator on' : 'Narrator off');
   if (key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   if (key === 'j' && phase?.phase === 'playing') $('joinSmall').classList.toggle('show');
   if (!phase) return;

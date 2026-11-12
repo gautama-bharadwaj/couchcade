@@ -4,7 +4,60 @@ const FALL_MS = 600;
 const fallStarted = new Map(); // id -> time we first saw them fall (client-side animation)
 let lastRound = 0;
 
+let nextBeatAt = 0;
+
 export default {
+  // Sounds and narration for state changes (see public/tv/audio.js).
+  onSnapshot(prev, s, audio) {
+    const { sfx, say, pick } = audio;
+    const t = performance.now();
+
+    // Countdown: 3, 2, 1 beeps, then GO.
+    if (s.phase === 'countdown' && (!prev || prev.phase !== 'countdown' || s.timer !== prev.timer) && s.timer > 0) {
+      sfx.beep();
+      if (!prev || prev.phase !== 'countdown') say(s.round === 1 ? 'Get ready!' : `Round ${s.round}!`, { rate: 1.1, interrupt: true });
+    }
+    if (s.phase === 'play' && prev?.phase === 'countdown') {
+      sfx.beep(true);
+      say('Go!', { rate: 1.2, interrupt: true });
+    }
+    if (!prev) return;
+
+    // Hits and dashes.
+    const bumps = s.fx?.bumps ?? [];
+    if (bumps.length) sfx.thud(Math.max(...bumps.map((b) => b.power)));
+    if (s.fx?.dashes) sfx.whoosh();
+
+    // Falling off.
+    const was = new Map(prev.players.map((p) => [p.id, p.alive]));
+    const fell = s.players.filter((p) => !p.alive && was.get(p.id));
+    for (const p of fell) {
+      sfx.fall();
+      if (s.phase === 'play' || s.phase === 'roundover') say(pick([`${p.name} is out!`, `Bye bye, ${p.name}!`, `${p.name} takes a dive!`]), { rate: 1.1 });
+    }
+
+    // Heartbeat as the platform shrinks: faster and louder near the end.
+    if (s.phase === 'play' && s.platform.r < 330 && t >= nextBeatAt) {
+      const danger = 1 - s.platform.r / 330; // 0..1
+      sfx.heartbeat(danger);
+      nextBeatAt = t + 1000 - 650 * danger;
+    }
+
+    // Round and match winners.
+    if (s.phase === 'roundover' && prev.phase !== 'roundover') {
+      if (s.matchWinner) {
+        sfx.fanfare();
+        say(`${s.matchWinner} wins the match!`, { delay: 0.8 });
+      } else if (s.roundWinner) {
+        sfx.jingle();
+        say(`${s.roundWinner} wins the round!`, { delay: 0.8 });
+      } else if (!s.solo) {
+        sfx.buzz();
+        say('Nobody survives. A draw!', { delay: 0.8 });
+      }
+    }
+  },
+
   draw(ctx, { prev, cur, alpha, arena, now }) {
     if (cur.round !== lastRound) {
       fallStarted.clear();

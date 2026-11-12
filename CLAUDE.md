@@ -7,6 +7,7 @@ Home-only party game platform. A browser on a computer connected to the TV over 
 - **Many games, one platform.** Every game plugs into the same lobby → playing → results flow (`server/session.js`). Games never handle joining, hosting or reconnects.
 - **The server is authoritative.** Game rules run only in `server/games/<id>.js`. TV renderers (`public/tv/games/<id>.js`) only draw snapshots. Phones only send `{x, y, a, b}` input.
 - **No build step.** Use plain ES modules, Node 20+, and only the `ws` and `qrcode` dependencies. Keep it that way so the Pi deploy is just copying the folder. Ask before adding a framework or bundler.
+- **Sound lives on the TV.** `public/tv/audio.js` synthesizes effects (Web Audio) and narrates with speech synthesis; no audio files. Renderers react to state changes in `onSnapshot(prev, cur, audio)`. If a sound needs an event the snapshot doesn't show (like a collision), add it to the snapshot (see `fx` in Bumper Arena).
 - **The TV is a 1600x900 logical canvas** (`server/arena.js`), scaled to fit. Keep HUD elements about 5% from the edges because of TV overscan.
 
 ## Adding a game

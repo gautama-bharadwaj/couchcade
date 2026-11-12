@@ -22,11 +22,15 @@ npm run dev        # restarts automatically when you edit server files
 2. The host picks a game on their phone and taps **Start**.
 3. When the game ends, everyone sees the results, then it goes back to the lobby.
 
-TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game.
+TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game.
+
+### Sound
+
+The TV plays synthesized sound effects and a narrator using the browser's built-in voice; there are no audio files. Browsers only allow sound after you interact, so press any key or click on the TV page once. **M** mutes, **N** turns the narrator on or off (remembered per browser). The narrator sounds best in Chrome or Safari on the Mac; Chromium on a Raspberry Pi may have only a robotic voice or none.
 
 ### Playing with bots
 
-The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play Shed! and Midnight Gala; in Bumper Arena and Sandbox they just stand still.
+The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play all three games (in Bumper Arena they chase and shove; in Sandbox they stand still).
 
 ### Testing without phones
 
@@ -72,7 +76,7 @@ public/
 ### Adding a game
 
 1. `server/games/<id>.js`: export `{ id, title, description, minPlayers, maxPlayers, controller, create }`. The contract is documented at the top of `server/games/index.js`.
-2. `public/tv/games/<id>.js`: export `{ draw(ctx, { prev, cur, alpha, arena, now }) }`.
+2. `public/tv/games/<id>.js`: export `{ draw(ctx, { prev, cur, alpha, arena, now }) }`, and optionally `onSnapshot(prev, cur, audio)` for sound effects and narration (see `public/tv/audio.js`).
 3. Register it in `server/games/index.js` and `public/tv/games/index.js`.
 
 Turn-based or hidden-information games use `controller: { type: 'screens' }` instead of buttons. The phone then shows whatever `playerView(id).screen` describes (title, role badge, info cards, a list to pick from, a text box, buttons) and taps come back to the game's `onAction(id, { key, value })`. See "Phone screens" in `server/games/index.js`; Midnight Gala and Shed! are the examples.
