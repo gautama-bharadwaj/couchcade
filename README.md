@@ -34,7 +34,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 | --- | --- | --- |
 | **Bumper Arena** | Joystick + Dash | Shove others off a shrinking platform. Last one standing wins the round; first to 3 wins. One player = practice mode. |
 | **Midnight Gala** | Phone screens | Hidden roles for 4–8. Secret Thieves steal gems at night; everyone picks rooms, compares alibis and evidence, and votes people out. Roles: Thief, Detective, Bodyguard (5+), Gossip (6+), Guest. |
-| **Shed!** | Phone screens | Color-matching card game for 2–8. Your hand is on your phone; match the top card's color or number, use Skip / Reverse / Draw 2 / Wilds, and tap "Last card!" before someone catches you. 108-card deck, 7 each. |
+| **Shed!** | Phone screens | Color-matching card game for 2–8. Your hand is on your phone; match the top card's color or number, use Skip / Reverse / Draw 2 / Wilds, stack +2s and +4s to pass the penalty along, and tap "Last card!" before someone catches you. 108-card deck, 7 each. |
 | Sandbox | Joystick + Boost | Steer a dot around. For testing controllers and latency. |
 
 ## Architecture

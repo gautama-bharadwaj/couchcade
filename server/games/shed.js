@@ -6,7 +6,9 @@
 // On your turn, play a card that matches the top card's color, number or symbol, or any Wild.
 // Otherwise draw one; if it fits you may play it, or pass.
 //   Skip: next player loses their turn. Reverse: direction flips (with 2 players it acts as Skip).
-//   Draw 2 / Wild Draw 4: next player draws and loses their turn. Wilds: you pick the color.
+//   Draw 2 / Wild Draw 4: next player draws and loses their turn, unless they stack:
+//   a +2 or +4 on a +2, or a +4 on a +4, passes the growing total to the next player.
+//   Wilds: you pick the color.
 // Down to one card? Tap "Last card!" before someone catches you, or draw 2.
 // First to empty their hand wins. Others score the points left in their hand (lower is better).
 
@@ -43,6 +45,8 @@ export default {
       color: null, // active color (a wild's chosen color)
       left: TURN_SECONDS,
       drewThisTurn: null, // card id drawn this turn (may be played or passed)
+      pending: 0, // stacked draw penalty waiting for the current player
+      pendingKind: null, // 'draw2' | 'wild4': what can be stacked on it
       choosingWild: null, // card waiting for a color pick
       called: new Set(), // said "Last card!" while holding one card
       oneSince: new Map(), // id -> when they went down to one card
@@ -98,6 +102,8 @@ export default {
 
     function playable(card) {
       const t = top();
+      // Facing a stack: only another draw card (a +2 can't go on a +4).
+      if (st.pending) return card.kind === 'wild4' || (card.kind === 'draw2' && st.pendingKind === 'draw2');
       if (card.kind === 'wild' || card.kind === 'wild4') return true;
       if (card.color === st.color) return true;
       if (card.kind === 'number' && t.kind === 'number' && card.value === t.value) return true;
@@ -134,18 +140,19 @@ export default {
         if (order.length === 2) skip = 1;
         else st.dir *= -1;
         line += order.length === 2 ? ` · ${name(nextId)} is skipped` : ' · direction reversed';
-      } else if (card.kind === 'draw2') {
-        draw(nextId, 2);
-        skip = 1;
-        line += ` · ${name(nextId)} draws 2`;
-      } else if (card.kind === 'wild4') {
-        draw(nextId, 4);
-        skip = 1;
-        line += ` · ${name(nextId)} draws 4`;
+      } else if (card.kind === 'draw2' || card.kind === 'wild4') {
+        st.pending += card.kind === 'draw2' ? 2 : 4;
+        st.pendingKind = card.kind;
+        line += ` · ${name(nextId)} must stack or draw ${st.pending}`;
       }
       say(line);
 
       if (hand.length === 0) {
+        if (st.pending) {
+          draw(nextId, st.pending); // the last card's penalty still lands
+          say(`${name(nextId)} draws ${st.pending}`);
+          st.pending = 0;
+        }
         st.winner = id;
         st.endLeft = 8;
         say(`${name(id)} is out of cards!`);
@@ -154,10 +161,20 @@ export default {
       nextTurn(skip);
     }
 
+    function takePenalty(id) {
+      const n = st.pending;
+      st.pending = 0;
+      st.pendingKind = null;
+      draw(id, n);
+      say(`${name(id)} draws ${n}`);
+      nextTurn();
+    }
+
     function autoMove() {
       // Time ran out: finish a pending wild with a sensible color, otherwise draw (if not yet) and pass.
       const id = current();
       if (st.choosingWild) return play(id, st.choosingWild, bestColor(hands.get(id)));
+      if (st.pending) return takePenalty(id);
       if (!st.drewThisTurn) {
         draw(id, 1);
         say(`${name(id)} ran out of time and drew a card`);
@@ -198,7 +215,12 @@ export default {
       s.hand = { key: 'play', cards: hand.map((c) => cardView(c, canPlay(c))) };
 
       s.actions = [];
-      if (myTurn) {
+      if (myTurn && st.pending) {
+        const what = st.pendingKind === 'draw2' ? 'a +2 or +4' : 'a +4';
+        s.title = `Stack or draw ${st.pending}`;
+        s.lines.push(`Play ${what} to pass it on, or take the ${st.pending} cards.`);
+        s.actions.push({ key: 'draw', label: `Draw ${st.pending}`, style: 'secondary' });
+      } else if (myTurn) {
         if (!st.drewThisTurn) s.actions.push({ key: 'draw', label: 'Draw a card', style: 'secondary' });
         else s.actions.push({ key: 'pass', label: 'Keep it and pass', style: 'secondary' });
         if (st.drewThisTurn) s.lines.push(hand.some((c) => c.id === st.drewThisTurn && playable(c)) ? 'You drew a card that fits. Play it or pass.' : "The card you drew doesn't fit. Pass.");
@@ -259,6 +281,7 @@ export default {
           }
           return play(id, card);
         }
+        if (key === 'draw' && st.pending) return takePenalty(id);
         if (key === 'draw' && !st.drewThisTurn) {
           const [c] = draw(id, 1);
           if (!c) return nextTurn();
@@ -286,6 +309,7 @@ export default {
           turn: st.winner ? null : current(),
           left: st.left,
           choosing: !!st.choosingWild,
+          pending: st.pending,
           log: st.log,
           lastPlayed: st.lastPlayed,
           winner: st.winner,

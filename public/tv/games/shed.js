@@ -43,6 +43,10 @@ export default {
     cardBack(ctx, cx - 150, cy, s.drawPile);
     card(ctx, s.top, s.colors, cx + 70, cy, 1 + pop * 0.15, s.color);
     if (active) text(ctx, active.label, cx + 70, cy + 140, { size: 26, weight: 800, color: active.hex });
+    if (s.pending) {
+      circle(ctx, cx + 160, cy - 110, 46 + 3 * Math.sin(now / 150), '#ff5a5f');
+      text(ctx, `+${s.pending}`, cx + 160, cy - 96, { size: 38, weight: 900, color: '#fff' });
+    }
 
     // Players in a row along the bottom, in turn order.
     const n = s.players.length;
