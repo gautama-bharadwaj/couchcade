@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- No zooming: pinch and double-tap would fight the joystick -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Couchcade" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d0f14" />
+  <title>Couchcade</title>
+  <style>
+    :root { color-scheme: dark; --accent: #ffc93c; --line: #2a3142; --panel: #141824; --muted: #8a93a8; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; background: #0d0f14; color: #f2f4f8; font-family: system-ui, -apple-system, sans-serif;
+      overscroll-behavior: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overflow: hidden; }
+    body.playing { touch-action: none; }
+    .screen { position: fixed; inset: 0; display: none; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+    .screen.active { display: flex; }
+    h1 { margin: 0; font-size: 2rem; font-weight: 900; }
+    h1 span { color: #ffc93c; }
+    button { font: inherit; }
+    .primary { font-size: 1.25rem; font-weight: 800; padding: 14px 28px; border-radius: 14px; border: 0; background: var(--accent); color: #0d0f14; }
+    .muted { color: var(--muted); }
+
+    /* Join */
+    #join { flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+    #name { font-size: 1.3rem; padding: 14px 16px; width: min(320px, 90vw); border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: inherit; text-align: center; user-select: text; -webkit-user-select: text; }
+    #joinMsg { color: #ff8c8c; min-height: 1.2em; }
+
+    /* Lobby */
+    #lobby { flex-direction: column; gap: 14px; overflow-y: auto; }
+    #lobby .me { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 700; }
+    .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); flex: none; }
+    #gameList { display: grid; gap: 10px; }
+    #gameList button { text-align: left; padding: 14px 16px; border-radius: 14px; border: 2px solid var(--line); background: var(--panel); color: inherit; }
+    #gameList button.sel { border-color: var(--accent); }
+    #gameList .t { font-weight: 800; font-size: 1.15rem; }
+    #gameList .d { color: var(--muted); font-size: .95rem; margin-top: 2px; }
+    #gameList button:disabled { opacity: 1; }
+    #startBtn { margin-top: 4px; }
+    #lobbyMsg { min-height: 1.2em; color: #ff8c8c; }
+
+    /* Pad: left = joystick zone, right = buttons */
+    #pad { flex-direction: row; padding: 0; }
+    #stickZone { position: relative; flex: 1.3; border-right: 1px solid #1e2433; touch-action: none; }
+    #stickHint { position: absolute; inset: 0; display: grid; place-items: center; color: #3a4258; font-size: 1.1rem; pointer-events: none; }
+    #stickBase, #stickKnob { position: absolute; border-radius: 50%; pointer-events: none; display: none; transform: translate(-50%, -50%); }
+    #stickBase { width: 150px; height: 150px; border: 3px solid var(--line); background: rgba(255,255,255,.03); }
+    #stickKnob { width: 70px; height: 70px; background: var(--accent); opacity: .9; }
+    #buttons { flex: 1; display: flex; align-items: center; justify-content: center; gap: 24px; touch-action: none; }
+    .btn { width: 130px; height: 130px; border-radius: 50%; border: 0; font-size: 1.4rem; font-weight: 800; color: #0d0f14; background: var(--accent); opacity: .9; transition: transform .05s; }
+    .btn.secondary { width: 96px; height: 96px; font-size: 1.1rem; background: var(--line); color: #f2f4f8; }
+    .btn.down { opacity: 1; transform: scale(.93); }
+    .btn.dim { opacity: .35; }
+    #hud { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 0; right: 0; display: none; justify-content: center; gap: 10px; align-items: center; font-weight: 700; pointer-events: none; }
+    body.playing #hud { display: flex; }
+    #hudStatus { color: var(--muted); font-weight: 500; }
+    #endBtn { position: fixed; right: max(12px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); display: none; font-size: .85rem; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); }
+    body.playing.host #endBtn { display: block; }
+
+    /* Results */
+    #results { flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+    #resTitle { font-size: 1.6rem; font-weight: 800; }
+    #resList { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; min-width: 240px; }
+    #resList li { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; }
+    #resList li b { margin-left: auto; }
+
+    #conn { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: .8rem; color: var(--muted); pointer-events: none; }
+
+    /* Ask for landscape while playing */
+    #rotate { position: fixed; inset: 0; display: none; place-items: center; background: #0d0f14; font-size: 1.3rem; text-align: center; padding: 24px; z-index: 10; }
+    @media (orientation: portrait) { body.playing #rotate { display: grid; } }
+  </style>
+</head>
+<body>
+  <section id="join" class="screen active">
+    <h1>Couch<span>cade</span></h1>
+    <input id="name" maxlength="16" placeholder="Your name" autocomplete="nickname" />
+    <button id="joinBtn" class="primary">Join</button>
+    <div id="joinMsg"></div>
+  </section>
+
+  <section id="lobby" class="screen">
+    <div class="me"><span class="dot"></span><span id="meName"></span></div>
+    <div id="lobbyInfo" class="muted"></div>
+    <div id="gameList"></div>
+    <button id="startBtn" class="primary">Start</button>
+    <div id="lobbyMsg"></div>
+  </section>
+
+  <section id="pad" class="screen">
+    <div id="stickZone">
+      <div id="stickHint">Drag here to move</div>
+      <div id="stickBase"></div>
+      <div id="stickKnob"></div>
+    </div>
+    <div id="buttons"></div>
+  </section>
+
+  <section id="results" class="screen">
+    <div id="resTitle"></div>
+    <ol id="resList"></ol>
+    <div class="muted">Back to the lobby in a few seconds…</div>
+  </section>
+
+  <div id="hud"><span class="dot"></span><span id="who"></span><span id="hudStatus"></span></div>
+  <button id="endBtn">End game</button>
+  <div id="conn"></div>
+  <div id="rotate">↻<br />Turn your phone sideways</div>
+
+  <script type="module" src="/controller/controller.js"></script>
+</body>
+</html>
