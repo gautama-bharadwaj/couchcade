@@ -21,22 +21,14 @@ const deadAt = new Map(); // id -> { t, x, y, facing, color, fell }
 let stars = null;
 
 export default {
+  // Sound effects only; no narrator in this game (too chatty for a fast brawler).
   onSnapshot(prev, s, audio) {
-    const { sfx, say, pick } = audio;
+    const { sfx } = audio;
 
-    if (s.phase === 'countdown' && (!prev || prev.phase !== 'countdown' || s.timer !== prev.timer) && s.timer > 0) {
-      sfx.beep();
-      if (!prev || prev.phase !== 'countdown' || prev.round !== s.round) {
-        say(s.round === 1 ? `Get ready! ${s.arena.title}.` : `Round ${s.round}. ${s.arena.title}!`, { rate: 1.1, interrupt: true });
-      }
-    }
-    if (s.phase === 'play' && prev?.phase === 'countdown') {
-      sfx.beep(true);
-      say('Fight!', { rate: 1.2, interrupt: true });
-    }
+    if (s.phase === 'countdown' && (!prev || prev.phase !== 'countdown' || s.timer !== prev.timer) && s.timer > 0) sfx.beep();
+    if (s.phase === 'play' && prev?.phase === 'countdown') sfx.beep(true);
     if (!prev) return;
     const fx = s.fx ?? {};
-    const name = (id) => s.players.find((p) => p.id === id)?.name ?? 'Someone';
 
     for (const shot of fx.shots ?? []) {
       if (shot.weapon === 'fists' || shot.weapon === 'bat') sfx.swing();
@@ -54,40 +46,16 @@ export default {
     }
     if (fx.booms?.length) sfx.boom();
     if (fx.pickups?.length) sfx.pickup();
-    if (fx.crates) {
-      sfx.drop();
-      if (Math.random() < 0.35) say(pick(['Supply drop!', 'Weapon incoming!', 'Crate!']), { rate: 1.15 });
-    }
+    if (fx.crates) sfx.drop();
     if (fx.crush) sfx.slam();
     if (fx.lava) sfx.sizzle();
-
-    for (const d of fx.deaths ?? []) {
-      const who = name(d.id);
-      sfx.fall();
-      let line;
-      if (d.by && d.by !== d.id) line = pick([`${name(d.by)} takes out ${who}!`, `${who} is out, thanks to ${name(d.by)}!`, `${name(d.by)} gets ${who}!`]);
-      else if (d.fell) line = pick([`${who} falls!`, `Bye bye, ${who}!`, `${who} takes a dive!`]);
-      else line = pick([`${who} is out!`, `${who} is done!`]);
-      say(line, { rate: 1.15 });
-    }
-
-    if (s.suddenDeath && !prev.suddenDeath && s.phase === 'play') {
-      sfx.alarm();
-      say('Sudden death! Everyone is losing health!', { rate: 1.1 });
-    }
-    if (s.lavaY != null && prev.lavaY != null && prev.lavaY >= 895 && s.lavaY < 895) say('The lava is rising!', { rate: 1.1 });
+    for (const _ of fx.deaths ?? []) sfx.fall();
+    if (s.suddenDeath && !prev.suddenDeath && s.phase === 'play') sfx.alarm();
 
     if (s.phase === 'roundover' && prev.phase !== 'roundover') {
-      if (s.matchWinner) {
-        sfx.fanfare();
-        say(`${s.matchWinner} wins the match!`, { delay: 0.8 });
-      } else if (s.roundWinner) {
-        sfx.jingle();
-        say(`${s.roundWinner} wins the round!`, { delay: 0.8 });
-      } else {
-        sfx.buzz();
-        say('Nobody left standing. A draw!', { delay: 0.8 });
-      }
+      if (s.matchWinner) sfx.fanfare();
+      else if (s.roundWinner) sfx.jingle();
+      else sfx.buzz();
     }
   },
 
