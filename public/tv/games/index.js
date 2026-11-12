@@ -8,6 +8,7 @@
 import bumper from './bumper.js';
 import gala from './gala.js';
 import shed from './shed.js';
+import stickup from './stickup.js';
 import sandbox from './sandbox.js';
 
-export const renderers = { bumper, gala, shed, sandbox };
+export const renderers = { bumper, stickup, gala, shed, sandbox };
