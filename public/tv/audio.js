@@ -186,6 +186,40 @@ export const sfx = {
   fall: () => tone(1400, 0.9, { type: 'sine', slideTo: 180, gain: 0.16 }),
   doorCreak: () => tone(160, 0.8, { type: 'sawtooth', slideTo: 230, gain: 0.05 }),
   clockChime: () => [0, 1, 2].forEach((i) => tone(N.G4 / 2, 1.1, { type: 'sine', gain: 0.2, at: i * 0.9 })),
+
+  // Stickup
+  punch: (heavy = false) => {
+    noise(heavy ? 0.12 : 0.07, { type: 'lowpass', freq: heavy ? 700 : 1200, gain: heavy ? 0.45 : 0.3 });
+    tone(heavy ? 120 : 180, 0.1, { type: 'sine', slideTo: 60, gain: heavy ? 0.4 : 0.25 });
+  },
+  swing: () => noise(0.12, { type: 'bandpass', freq: 900, slideTo: 2600, q: 1.2, gain: 0.12 }),
+  pistol: () => {
+    noise(0.09, { type: 'highpass', freq: 1500, gain: 0.32 });
+    tone(320, 0.08, { type: 'square', slideTo: 90, gain: 0.12 });
+  },
+  shotgun: () => {
+    noise(0.28, { type: 'lowpass', freq: 2400, slideTo: 300, gain: 0.55 });
+    tone(90, 0.22, { type: 'sine', slideTo: 40, gain: 0.45 });
+  },
+  toss: () => noise(0.2, { type: 'bandpass', freq: 500, slideTo: 1400, q: 2, gain: 0.15 }),
+  charge: () => tone(200, 0.55, { type: 'sawtooth', slideTo: 1600, gain: 0.07 }),
+  zap: () => {
+    tone(2200, 0.35, { type: 'sawtooth', slideTo: 180, gain: 0.16 });
+    noise(0.3, { type: 'highpass', freq: 4000, gain: 0.2 });
+  },
+  boom: () => {
+    noise(0.9, { type: 'lowpass', freq: 1800, slideTo: 120, gain: 0.7, attack: 0.005 });
+    tone(70, 0.7, { type: 'sine', slideTo: 30, gain: 0.6 });
+  },
+  ding: () => tone(1760, 0.25, { type: 'triangle', gain: 0.16 }),
+  pickup: () => notes([N.G4, N.D5], { type: 'square', gain: 0.1, step: 0.06, len: 0.08 }),
+  hop: () => tone(300, 0.1, { type: 'triangle', slideTo: 600, gain: 0.08 }),
+  slam: () => {
+    noise(0.35, { type: 'lowpass', freq: 500, gain: 0.6 });
+    tone(55, 0.4, { type: 'square', slideTo: 35, gain: 0.25 });
+  },
+  sizzle: () => noise(0.35, { type: 'highpass', freq: 2500, gain: 0.18 }),
+  drop: () => tone(900, 0.5, { type: 'sine', slideTo: 500, gain: 0.08 }),
 };
 
 // ---- Ambience ---------------------------------------------------------------------

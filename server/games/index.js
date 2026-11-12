@@ -47,9 +47,10 @@
 import bumper from './bumper.js';
 import gala from './gala.js';
 import shed from './shed.js';
+import stickup from './stickup.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, gala, shed, sandbox];
+export const GAMES = [bumper, stickup, gala, shed, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
