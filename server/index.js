@@ -100,6 +100,7 @@ function notFound(res) {
 //                     {t:'input', x, y, a, b}               players, ~30/s
 //                     {t:'act', key, value?}                players, screens games only
 //                     {t:'select', gameId} {t:'start'} {t:'end'}   host phone or TV only
+//                     {t:'addBot'} {t:'removeBot'}                 host phone or TV, lobby only
 //                     {t:'ping', at}
 //   server -> player  {t:'welcome', id, token, name, color} | {t:'full'}
 //                     {t:'you', data}                       game's playerView, ~10/s
@@ -159,10 +160,17 @@ wss.on('connection', (ws, req) => {
 
       case 'select':
       case 'start':
-      case 'end': {
+      case 'end':
+      case 'addBot':
+      case 'removeBot': {
         const isHost = ws.role === 'tv' || (ws.role === 'player' && ws.playerId === lobby.hostId());
         if (!isHost) return send(ws, { t: 'error', message: 'Only the host can do that' });
-        const r = msg.t === 'select' ? session.select(msg.gameId) : msg.t === 'start' ? session.start() : session.end();
+        const r =
+          msg.t === 'select' ? session.select(msg.gameId)
+          : msg.t === 'start' ? session.start()
+          : msg.t === 'addBot' ? session.addBot()
+          : msg.t === 'removeBot' ? session.removeBot()
+          : session.end();
         if (r?.error) send(ws, { t: 'error', message: r.error });
         break;
       }

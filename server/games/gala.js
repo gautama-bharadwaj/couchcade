@@ -12,6 +12,9 @@
 // Thieves win by stealing enough gems or lasting until dawn. Guests win by catching every Thief,
 // unless the last Thief caught names the Detective ("last guess").
 //
+// Bots (lobby "Add bot") play from the bot section below: they pick rooms and use their powers at
+// random, and vote using the evidence on their own "phone" (suspicion scores).
+//
 // All rules live here; the TV (public/tv/games/gala.js) only draws snapshot().
 
 const ROOMS = [
@@ -82,9 +85,13 @@ export default {
     const inGame = () => roster.filter((id) => !st.out.has(id));
     const thievesLeft = () => inGame().filter((id) => roles.get(id) === 'thief');
     const note = (id, label, sub, c) => st.privateNotes.get(id)?.unshift({ label, sub, color: c });
+    // What each player has reason to believe, for bots: id -> Map(target -> score). Higher = more suspicious.
+    const susp = new Map(roster.map((id) => [id, new Map()]));
+    const suspect = (id, target, n) => susp.get(id)?.set(target, (susp.get(id).get(target) ?? 0) + n);
     const detectiveCanAct = () => (st.night - 1) % DETECTIVE_EVERY === 0;
 
     function enter(phase) {
+      scheduleBots(phase);
       st.phase = phase;
       st.left = TIMES[phase];
       st.ready.clear();
@@ -162,6 +169,7 @@ export default {
             const decoys = inGame().filter((o) => o !== id && o !== w);
             const pair = shuffle([id, pick(decoys)].filter(Boolean));
             note(w, 'Evidence: a gem vanished in your room', `It was ${pair.map(name).join(' or ')}.`, '#ffc93c');
+            for (const o of pair) suspect(w, o, 1);
           }
           // Nobody saw it: a random guest finds a dropped glove instead (true evidence).
           if (!witnesses.length) glove(id);
@@ -177,6 +185,7 @@ export default {
       // Detective
       for (const [det, target] of st.investigate) {
         const thief = roles.get(target) === 'thief';
+        suspect(det, target, thief ? 100 : -100);
         note(det, `Investigation: ${name(target)}`, thief ? 'is a THIEF.' : 'is not a Thief.', thief ? ROLES.thief.color : ROLES.detective.color);
       }
       for (const [bg, roomId] of st.guard) note(bg, `You guarded the ${roomById.get(roomId).label}`, log.foiled.includes(roomId) ? 'You stopped a theft!' : 'Quiet night.', ROLES.bodyguard.color);
@@ -191,6 +200,7 @@ export default {
       const finder = pick(finders);
       if (!finder) return;
       note(finder, 'Evidence: you found a glove', `It belongs to ${name(ofId)}.`, '#ffc93c');
+      suspect(finder, ofId, 2);
       st.gloveFound = true; // the TV says "evidence turned up", never whether it was planted
     }
 
@@ -377,9 +387,75 @@ export default {
       return { title: '…', tag };
     }
 
+    // ---- Bots -------------------------------------------------------------
+    const BOT_DELAY = { intro: [2, 5], night: [3, 8], talk: [6, 15], vote: [3, 8], lastGuess: [3, 6] };
+    const bots = roster.filter((id) => players.get(id)?.bot);
+    const botAt = new Map();
+    let clock = 0;
+    function scheduleBots(phase) {
+      const [lo, hi] = BOT_DELAY[phase] ?? [1, 2];
+      for (const id of bots) botAt.set(id, clock + lo + Math.random() * (hi - lo));
+    }
+    scheduleBots('intro');
+
+    function botThink() {
+      for (const id of bots) {
+        if (clock < botAt.get(id) || isDone(id) || !needed().includes(id)) continue;
+        botAt.set(id, clock + 0.8 + Math.random()); // next step of the same phase, if any
+        botMove(id);
+      }
+    }
+
+    function botMove(id) {
+      const role = roles.get(id);
+      const act = (key, value) => api.onAction(id, { key, value });
+      const others = inGame().filter((o) => o !== id);
+      const notThieves = others.filter((o) => roles.get(o) !== 'thief');
+      switch (st.phase) {
+        case 'intro':
+          return act('ready');
+        case 'night': {
+          if (!st.room.has(id)) return act('room', pick(ROOMS).id);
+          if (role === 'thief' && !st.move.has(id)) {
+            const r = Math.random();
+            return act('move', r < 0.55 ? 'steal' : r < 0.8 || !notThieves.length ? 'lie' : `plant:${pick(notThieves)}`);
+          }
+          if (role === 'detective' && !st.investigate.has(id)) {
+            const unknown = others.filter((o) => !susp.get(id).has(o) || Math.abs(susp.get(id).get(o)) < 100);
+            return act('investigate', pick(unknown.length ? unknown : others));
+          }
+          if (role === 'bodyguard' && !st.guard.has(id)) return act('guard', pick(ROOMS).id);
+          return;
+        }
+        case 'talk':
+          if (role === 'gossip' && st.gossipCount < GOSSIP_MAX_PER_TALK && Math.random() < 0.5) {
+            const top = mostSuspicious(id, others);
+            const target = top ?? pick(others);
+            if (target) act('gossip', pick([`Keep an eye on ${name(target)}.`, `${name(target)} was acting weird last night.`, `I don't trust ${name(target)}.`]));
+          }
+          return act('ready');
+        case 'vote': {
+          if (role === 'thief') return act('vote', Math.random() < 0.25 || !notThieves.length ? 'nobody' : mostSuspicious(id, notThieves) ?? pick(notThieves));
+          const top = mostSuspicious(id, others);
+          return act('vote', top ?? (Math.random() < 0.4 ? 'nobody' : pick(others)));
+        }
+        case 'lastGuess':
+          return act('guess', pick(roster.filter((o) => o !== id && !st.out.has(o))));
+      }
+    }
+
+    /** The highest-scoring suspect with a positive score, ties broken at random. */
+    function mostSuspicious(id, among) {
+      const scored = shuffle(among).map((o) => [o, susp.get(id).get(o) ?? 0]).filter(([, v]) => v > 0);
+      scored.sort((a, b) => b[1] - a[1]);
+      return scored[0]?.[0];
+    }
+
     let acc = 0;
-    return {
+    const api = {
       update(dt) {
+        clock += dt;
+        if (!st.over && st.phase !== 'end') botThink();
         acc += dt;
         while (acc >= 1) {
           acc -= 1;
@@ -474,6 +550,7 @@ export default {
         };
       },
     };
+    return api;
   },
 };
 

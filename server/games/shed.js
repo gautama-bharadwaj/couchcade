@@ -10,6 +10,7 @@
 //   a +2 or +4 on a +2, or a +4 on a +4, passes the growing total to the next player.
 //   Wilds: you pick the color.
 // Down to one card? Tap "Last card!" before someone catches you, or draw 2.
+// Bots (lobby "Add bot") play from the bot section below, with small human-like delays.
 // First to empty their hand wins. Others score the points left in their hand (lower is better).
 
 const COLORS = [
@@ -23,7 +24,7 @@ const colorById = new Map(COLORS.map((c) => [c.id, c]));
 const TURN_SECONDS = 30;
 const HAND_SIZE = 7;
 const CATCH_PENALTY = 2;
-const CATCH_GRACE_MS = 3000; // time to say "Last card!" before anyone can catch you
+const CATCH_GRACE_S = 3; // time to say "Last card!" before anyone can catch you
 
 export default {
   id: 'shed',
@@ -39,6 +40,7 @@ export default {
     let drawPile = shuffle(makeDeck());
     const discard = [];
 
+    let clock = 0; // game seconds
     const st = {
       turn: 0, // index into order
       dir: 1,
@@ -62,13 +64,13 @@ export default {
     // Keep "who is down to one card, since when" in step with hand sizes.
     function trackOne(id) {
       if (hands.get(id).length === 1) {
-        if (!st.oneSince.has(id)) st.oneSince.set(id, Date.now());
+        if (!st.oneSince.has(id)) st.oneSince.set(id, clock);
       } else {
         st.oneSince.delete(id);
         st.called.delete(id);
       }
     }
-    const catchable = (o) => hands.get(o).length === 1 && !st.called.has(o) && Date.now() - (st.oneSince.get(o) ?? Infinity) >= CATCH_GRACE_MS;
+    const catchable = (o) => hands.get(o).length === 1 && !st.called.has(o) && clock - (st.oneSince.get(o) ?? Infinity) >= CATCH_GRACE_S;
     const current = () => order[st.turn];
     const top = () => discard.at(-1);
     const say = (line) => {
@@ -117,6 +119,7 @@ export default {
 
     function nextTurn(skip = 0) {
       step(1 + skip);
+      botWait = clock + rand(1, 2.2);
       st.left = TURN_SECONDS;
       st.drewThisTurn = null;
       st.choosingWild = null;
@@ -233,9 +236,63 @@ export default {
       return s;
     }
 
+    // ---- Bots ---------------------------------------------------------------
+    let botWait = rand(1.5, 2.5);
+    const botTimers = new Map(); // `${kind}:${id}` -> clock time to act
+    const isBot = (id) => !!players.get(id)?.bot;
+    function after(key, min, max) {
+      if (!botTimers.has(key)) botTimers.set(key, clock + rand(min, max));
+      return clock >= botTimers.get(key);
+    }
+
+    function botThink() {
+      for (const id of order) {
+        if (!isBot(id)) continue;
+        const hand = hands.get(id);
+        // Say "Last card!" quickly, but forget sometimes so you can catch them.
+        if (hand.length === 1 && !st.called.has(id)) {
+          if (!botTimers.has(`last:${id}`)) botTimers.set(`last:${id}`, Math.random() < 0.2 ? Infinity : clock + rand(0.4, 2));
+          if (after(`last:${id}`)) api.onAction(id, { key: 'last' });
+        } else botTimers.delete(`last:${id}`);
+        // Catch anyone who forgot.
+        for (const o of order) {
+          const k = `catch:${id}:${o}`;
+          if (o !== id && catchable(o)) {
+            if (after(k, 0.8, 4)) api.onAction(id, { key: `catch:${o}` });
+          } else botTimers.delete(k);
+        }
+      }
+
+      const id = current();
+      if (!isBot(id) || clock < botWait) return;
+      botWait = clock + rand(0.7, 1.4); // pause between steps of the same turn
+      const hand = hands.get(id);
+      if (st.choosingWild) return api.onAction(id, { key: 'color', value: bestColor(hand.filter((c) => c !== st.choosingWild)) });
+      const options = hand.filter((c) => playable(c) && (!st.drewThisTurn || c.id === st.drewThisTurn));
+      if (options.length) return api.onAction(id, { key: 'play', value: botPick(options).id });
+      if (st.pending) return api.onAction(id, { key: 'draw' });
+      api.onAction(id, { key: st.drewThisTurn ? 'pass' : 'draw' });
+    }
+
+    function botPick(options) {
+      // Get mean when the next player is close to winning; otherwise save wilds and actions for later.
+      const nextId = order[(st.turn + st.dir + order.length) % order.length];
+      const threat = hands.get(nextId).length <= 2;
+      const score = (c) =>
+        (c.kind === 'number' ? 10 + c.value / 10 : 0) +
+        (['skip', 'reverse', 'draw2'].includes(c.kind) ? (threat ? 30 : 5) : 0) +
+        (c.kind === 'wild' ? (threat ? 2 : 1) : 0) +
+        (c.kind === 'wild4' ? (threat ? 40 : 0) : 0) +
+        (c.color === st.color ? 3 : 0) +
+        Math.random();
+      return options.reduce((best, c) => (score(c) > score(best) ? c : best));
+    }
+
     let acc = 0;
-    return {
+    const api = {
       update(dt) {
+        clock += dt;
+        if (!st.winner) botThink();
         acc += dt;
         while (acc >= 1) {
           acc -= 1;
@@ -336,6 +393,7 @@ export default {
         };
       },
     };
+    return api;
   },
 };
 
@@ -386,6 +444,10 @@ function bestColor(hand) {
   const count = new Map();
   for (const c of hand) if (c.color) count.set(c.color, (count.get(c.color) ?? 0) + 1);
   return [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? COLORS[Math.floor(Math.random() * COLORS.length)].id;
+}
+
+function rand(min, max) {
+  return min + Math.random() * (max - min);
 }
 
 function shuffle(a) {

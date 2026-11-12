@@ -66,6 +66,20 @@ export class Session {
     return {};
   }
 
+  addBot() {
+    if (this.phase !== 'lobby') return { error: 'Add bots in the lobby' };
+    const r = this.lobby.addBot();
+    if (!r.error) this.changed();
+    return r;
+  }
+
+  removeBot() {
+    if (this.phase !== 'lobby') return { error: 'Remove bots in the lobby' };
+    const r = this.lobby.removeBot();
+    if (!r.error) this.changed();
+    return r;
+  }
+
   /** Host ends the current game early, or skips the results screen. */
   end() {
     if (this.phase === 'playing') {

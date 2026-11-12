@@ -2,7 +2,7 @@
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
 // Keys (Mac keyboard / later a keyboard on the Pi):
-//   ↑/↓ pick a game · Enter start · Esc end game / skip results · F full screen · J join card during a game
+//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · Esc end game / skip results · F full screen · J join card during a game
 
 import { renderers } from './games/index.js';
 
@@ -175,5 +175,6 @@ window.addEventListener('keydown', (e) => {
     sendCmd({ t: 'select', gameId: next.id });
   }
   if (phase.phase === 'lobby' && key === 'enter') sendCmd({ t: 'start' });
+  if (phase.phase === 'lobby' && key === 'b') sendCmd({ t: e.shiftKey ? 'removeBot' : 'addBot' });
   if (key === 'escape') sendCmd({ t: 'end' });
 });

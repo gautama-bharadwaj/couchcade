@@ -138,6 +138,9 @@ function renderLobby(isHost) {
     list.append(b);
   }
   $('startBtn').style.display = isHost ? '' : 'none';
+  $('botRow').style.display = isHost ? 'flex' : 'none';
+  $('removeBotBtn').disabled = !phase.players.some((p) => p.bot);
+  $('addBotBtn').disabled = phase.players.length >= 8;
 }
 
 function renderResults(results) {
@@ -154,20 +157,24 @@ function renderResults(results) {
 }
 
 $('startBtn').addEventListener('click', () => cmd({ t: 'start' }));
+$('addBotBtn').addEventListener('click', () => cmd({ t: 'addBot' }));
+$('removeBotBtn').addEventListener('click', () => cmd({ t: 'removeBot' }));
 $('endBtn').addEventListener('click', () => cmd({ t: 'end' }));
 
 // --- Game screens (turn-based games) ---------------------------------------------
 // Rebuilt only when the screen JSON changes, so a half-typed message survives the 10/s updates.
 let lastScreen = null;
 function renderScreen(screen) {
-  const json = JSON.stringify(screen ?? null);
+  // The footer (often a countdown) updates in place, so ticking timers don't rebuild the
+  // buttons under someone's thumb.
+  $('screenFooter').textContent = screen?.footer ?? '';
+  const json = JSON.stringify(screen ? { ...screen, footer: undefined } : null);
   if (json === lastScreen) return;
   lastScreen = json;
   const body = $('screenBody');
   const typed = body.querySelector('input')?.value ?? '';
   const typedKey = body.querySelector('input')?.dataset.key;
   body.innerHTML = '';
-  $('screenFooter').textContent = screen?.footer ?? '';
   if (!screen) return;
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);

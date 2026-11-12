@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 export const COLORS = ['#ff5a5f', '#3fa7ff', '#ffc93c', '#4cd97b', '#b36bff', '#ff8c42', '#2ee6d6', '#ff6fd8'];
 export const MAX_PLAYERS = COLORS.length;
 
+const BOT_NAMES = ['Ada', 'Bix', 'Cog', 'Dot', 'Echo', 'Fizz', 'Gizmo', 'Hex'];
+
 // How long a disconnected player keeps their slot (phone locked, Wi-Fi blip).
 const RECONNECT_GRACE_MS = 60_000;
 
@@ -20,7 +22,7 @@ export class Lobby {
    */
   join(name, token) {
     if (token) {
-      const existing = [...this.players.values()].find((p) => p.token === token);
+      const existing = [...this.players.values()].find((p) => p.token && p.token === token);
       if (existing) {
         existing.connected = true;
         existing.lastSeen = Date.now();
@@ -46,6 +48,39 @@ export class Lobby {
     };
     this.players.set(player.id, player);
     return { player, rejoined: false };
+  }
+
+  /**
+   * Computer player for solo testing. Bots are always "connected", never host, and have no
+   * socket; each game decides their moves (look for player.bot in server/games/*.js).
+   */
+  addBot() {
+    if (this.players.size >= MAX_PLAYERS) return { error: 'The game is full' };
+    const usedColors = new Set([...this.players.values()].map((p) => p.colorIndex));
+    const colorIndex = COLORS.findIndex((_, i) => !usedColors.has(i));
+    const usedNames = new Set([...this.players.values()].map((p) => p.name));
+    const base = BOT_NAMES.find((n) => !usedNames.has(`${n} (bot)`)) ?? `Bot ${this.nextId}`;
+    const bot = {
+      id: String(this.nextId++),
+      token: null,
+      name: `${base} (bot)`,
+      bot: true,
+      colorIndex,
+      color: COLORS[colorIndex],
+      connected: true,
+      lastSeen: Date.now(),
+      input: { x: 0, y: 0, a: false, b: false },
+    };
+    this.players.set(bot.id, bot);
+    return { player: bot };
+  }
+
+  /** Removes the most recently added bot. */
+  removeBot() {
+    const bot = [...this.players.values()].filter((p) => p.bot).at(-1);
+    if (!bot) return { error: 'No bots to remove' };
+    this.players.delete(bot.id);
+    return {};
   }
 
   disconnect(id) {
@@ -83,7 +118,7 @@ export class Lobby {
 
   /** Host = the earliest-joined player who is still connected. Picks and starts games. */
   hostId() {
-    for (const p of this.players.values()) if (p.connected) return p.id;
+    for (const p of this.players.values()) if (p.connected && !p.bot) return p.id;
     return null;
   }
 
@@ -95,7 +130,7 @@ export class Lobby {
 
   /** Public view of the lobby (no tokens). */
   summary() {
-    return [...this.players.values()].map(({ id, name, color, connected }) => ({ id, name, color, connected }));
+    return [...this.players.values()].map(({ id, name, color, connected, bot }) => ({ id, name, color, connected, bot: !!bot }));
   }
 }
 

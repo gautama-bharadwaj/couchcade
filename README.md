@@ -22,7 +22,11 @@ npm run dev        # restarts automatically when you edit server files
 2. The host picks a game on their phone and taps **Start**.
 3. When the game ends, everyone sees the results, then it goes back to the lobby.
 
-TV keyboard shortcuts: **↑/↓** pick a game, **Enter** start, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game.
+TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game.
+
+### Playing with bots
+
+The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play Shed! and Midnight Gala; in Bumper Arena and Sandbox they just stand still.
 
 ### Testing without phones
 

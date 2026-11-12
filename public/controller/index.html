@@ -40,6 +40,8 @@
     #gameList .d { color: var(--muted); font-size: .95rem; margin-top: 2px; }
     #gameList button:disabled { opacity: 1; }
     #startBtn { margin-top: 4px; }
+    .botBtn { flex: 1; font-size: 1rem; font-weight: 700; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: inherit; }
+    .botBtn:disabled { opacity: .35; }
     #lobbyMsg { min-height: 1.2em; color: #ff8c8c; }
 
     /* Pad: left = joystick zone, right = buttons */
@@ -114,6 +116,10 @@
     <div class="me"><span class="dot"></span><span id="meName"></span></div>
     <div id="lobbyInfo" class="muted"></div>
     <div id="gameList"></div>
+    <div id="botRow" style="display:flex;gap:8px">
+      <button id="addBotBtn" class="botBtn">+ Add bot</button>
+      <button id="removeBotBtn" class="botBtn">− Remove bot</button>
+    </div>
     <button id="startBtn" class="primary">Start</button>
     <div id="lobbyMsg"></div>
   </section>
