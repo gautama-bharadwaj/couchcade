@@ -5,6 +5,7 @@
 
 import bumper from './bumper.js';
 import gala from './gala.js';
+import shed from './shed.js';
 import sandbox from './sandbox.js';
 
-export const renderers = { bumper, gala, sandbox };
+export const renderers = { bumper, gala, shed, sandbox };

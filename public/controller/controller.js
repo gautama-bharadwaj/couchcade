@@ -216,6 +216,21 @@ function renderScreen(screen) {
     wrap.append(opts);
   }
 
+  if (screen.hand) {
+    const { key, cards = [] } = screen.hand;
+    const hand = el('div', 'hand');
+    for (const c of cards) {
+      const b = el('button', `pcard${c.color ? '' : ' wild'}`);
+      if (c.color) b.style.background = c.color;
+      b.append(document.createTextNode(c.label));
+      if (c.small) b.append(el('small', '', c.small));
+      b.disabled = c.playable === false;
+      b.addEventListener('click', () => act(key, c.id));
+      hand.append(b);
+    }
+    wrap.append(hand);
+  }
+
   if (screen.input) {
     const { key, placeholder = '', maxLength = 80, submitLabel = 'Send' } = screen.input;
     const row = el('div', 'row');

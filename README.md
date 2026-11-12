@@ -34,6 +34,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 | --- | --- | --- |
 | **Bumper Arena** | Joystick + Dash | Shove others off a shrinking platform. Last one standing wins the round; first to 3 wins. One player = practice mode. |
 | **Midnight Gala** | Phone screens | Hidden roles for 4–8. Secret Thieves steal gems at night; everyone picks rooms, compares alibis and evidence, and votes people out. Roles: Thief, Detective, Bodyguard (5+), Gossip (6+), Guest. |
+| **Shed!** | Phone screens | Color-matching card game for 2–8. Your hand is on your phone; match the top card's color or number, use Skip / Reverse / Draw 2 / Wilds, and tap "Last card!" before someone catches you. 108-card deck, 7 each. |
 | Sandbox | Joystick + Boost | Steer a dot around. For testing controllers and latency. |
 
 ## Architecture
@@ -70,7 +71,7 @@ public/
 2. `public/tv/games/<id>.js`: export `{ draw(ctx, { prev, cur, alpha, arena, now }) }`.
 3. Register it in `server/games/index.js` and `public/tv/games/index.js`.
 
-Turn-based or hidden-information games use `controller: { type: 'screens' }` instead of buttons. The phone then shows whatever `playerView(id).screen` describes (title, role badge, info cards, a list to pick from, a text box, buttons) and taps come back to the game's `onAction(id, { key, value })`. See "Phone screens" in `server/games/index.js`; Midnight Gala is the example.
+Turn-based or hidden-information games use `controller: { type: 'screens' }` instead of buttons. The phone then shows whatever `playerView(id).screen` describes (title, role badge, info cards, a list to pick from, a text box, buttons) and taps come back to the game's `onAction(id, { key, value })`. See "Phone screens" in `server/games/index.js`; Midnight Gala and Shed! are the examples.
 
 The lobby, joining, reconnects, host controls, phone layout and results screen all come for free.
 
@@ -98,6 +99,6 @@ The lobby, joining, reconnects, host controls, phone layout and results screen a
 - [x] M3 Bumper Arena (first version; tune feel on real phones)
 - [x] Phone screens for turn-based games; players keep their seat for the whole game
 - [x] Midnight Gala (first version; needs a real game night to tune)
-- [ ] Next game: color-matching card game (shedding cards, hands on phones)
+- [x] Shed! (color-matching card game)
 - [ ] M4 Polish: sounds, keep phones awake, Draw & Guess
 - [ ] M5 Raspberry Pi

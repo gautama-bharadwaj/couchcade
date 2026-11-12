@@ -34,6 +34,9 @@
 //       selected: 'library',               // highlight the current pick
 //       locked: false,                     // true = shown but not tappable
 //     },
+//     hand: {                              // tappable playing cards; sends { key, value: card.id }
+//       key: 'play', cards: [{ id, label, color, small?, playable? }],  // playable:false = dimmed, not tappable
+//     },
 //     input: { key: 'msg', placeholder, maxLength, submitLabel },  // text box; sends { key, value: text }
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
@@ -43,9 +46,10 @@
 
 import bumper from './bumper.js';
 import gala from './gala.js';
+import shed from './shed.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, gala, sandbox];
+export const GAMES = [bumper, gala, shed, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
