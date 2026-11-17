@@ -30,7 +30,7 @@ The TV plays synthesized sound effects and a narrator using the browser's built-
 
 ### Playing with bots
 
-The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Bumper Arena they chase and shove, in Stickup they grab weapons and fight; in Sandbox they stand still).
+The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Fuse they peek before risky draws and love hiding Bombs on top for the next player; in Bumper Arena they chase and shove, in Stickup they grab weapons and fight; in Sandbox they stand still).
 
 ### Testing without phones
 
@@ -43,6 +43,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 | **Bumper Arena** | Joystick + Dash | Shove others off a shrinking platform. Last one standing wins the round; first to 3 wins. One player = practice mode. |
 | **Stickup** | Joystick + Jump + Hit | Side-view stick-figure brawl for 2–8. 100 health each, headshots hurt more, and knockback grows as you get hurt. Weapons parachute in (bat, pistol, shotgun, grenades, railgun); walk into a crate bare-handed to grab one. Arenas rotate: Rooftops, Factory (moving platform, crushers) and Lava Pit (rising lava, crumbling ledges). Last one standing wins the round; first to 5. Push the stick down and jump to drop through thin ledges; aim with the stick. Sound effects only, no narrator. |
 | **Midnight Gala** | Phone screens | Hidden roles for 4–8. Secret Thieves steal gems at night; everyone picks rooms, compares alibis and evidence, and votes people out. Roles: Thief, Detective, Bodyguard (5+), Gossip (6+), Guest. |
+| **Fuse** | Phone screens | Push-your-luck card game for 2–8 in a fireworks workshop. Play cards from your hand, then draw from the crate; draw a Bomb and you're out unless you douse it with a Bucket (then secretly hide it back in the crate) or cut the right one of three wires (1 in 3). Decoys look like Bombs when you peek but just go pop. Cards: Bucket, Periscope (see top 3), Nudge (see the top card, bury it), Duck (skip your draw), Hot Potato (next player owes your draws + 1), Boomerang (send a Hot Potato back), Stir, Back Door (draw from the bottom), Swipe (steal a random card), X-Ray (see a hand). The TV shows the odds of a Bomb and a burning fuse as the turn timer. Last one standing wins. |
 | **Shed!** | Phone screens | Color-matching card game for 2–8. Your hand is on your phone; match the top card's color or number, use Skip / Reverse / Draw 2 / Wilds, stack +2s and +4s to pass the penalty along, and tap "Last card!" before someone catches you. 108-card deck, 7 each. |
 | Sandbox | Joystick + Boost | Steer a dot around. For testing controllers and latency. |
 
@@ -113,6 +114,7 @@ The lobby, joining, reconnects, host controls, phone layout and results screen a
 - [x] Phone screens for turn-based games; players keep their seat for the whole game
 - [x] Midnight Gala (first version; needs a real game night to tune)
 - [x] Shed! (color-matching card game)
+- [x] Fuse (push-your-luck bomb card game)
 - [x] Stickup (stick-figure brawler; tune weapons and arenas on real phones)
 - [ ] M4 Polish: sounds, keep phones awake, Draw & Guess
 - [ ] M5 Raspberry Pi
