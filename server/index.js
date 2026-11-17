@@ -10,7 +10,10 @@ import { Session } from './session.js';
 import { ARENA } from './arena.js';
 
 const PORT = Number(process.env.PORT) || 3000;
-const TICK_HZ = 30;
+// 60 ticks a second: an input waits at most ~17 ms for the next tick (it was ~33 ms at 30).
+// TICK_HZ=30 npm start halves the CPU work if a small machine struggles.
+const TICK_HZ = Number(process.env.TICK_HZ) || 60;
+const VIEW_HZ = 10; // phone status updates
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 // ---------------------------------------------------------------------------
@@ -63,7 +66,7 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/join-info') {
       const qrSvg = await QRCode.toString(JOIN_URL, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
-      return sendJson(res, { url: JOIN_URL, qrSvg, maxPlayers: MAX_PLAYERS, arena: ARENA });
+      return sendJson(res, { url: JOIN_URL, qrSvg, maxPlayers: MAX_PLAYERS, arena: ARENA, tickHz: TICK_HZ });
     }
 
     const rel = ROUTES[url.pathname] ?? url.pathname;
@@ -101,11 +104,12 @@ function notFound(res) {
 //                     {t:'act', key, value?}                players, screens games only
 //                     {t:'select', gameId} {t:'start'} {t:'end'}   host phone or TV only
 //                     {t:'addBot'} {t:'removeBot'}                 host phone or TV, lobby only
-//                     {t:'ping', at}
+//                     {t:'ping', at, rtt?}                  rtt = player's last measured round trip
 //   server -> player  {t:'welcome', id, token, name, color} | {t:'full'}
 //                     {t:'you', data}                       game's playerView, ~10/s
 //   server -> all     {t:'phase', phase, gameId, games, controller, hostId, players, results}
-//   server -> tv      {t:'state', gameId, data}             game snapshot, TICK_HZ
+//   server -> tv      {t:'state', gameId, data, pads}       game snapshot, TICK_HZ; pads = buttons held per player
+//   server -> tv      {t:'net', tickHz, tickMaxMs, players}  latency stats, 1/s (the TV's L overlay)
 //   server -> any     {t:'pong', at} | {t:'error', message}
 // ---------------------------------------------------------------------------
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -151,7 +155,10 @@ wss.on('connection', (ws, req) => {
         break;
 
       case 'input':
-        if (ws.role === 'player') lobby.setInput(ws.playerId, msg);
+        if (ws.role === 'player') {
+          lobby.setInput(ws.playerId, msg);
+          noteInput(ws);
+        }
         break;
 
       case 'act':
@@ -177,6 +184,7 @@ wss.on('connection', (ws, req) => {
 
       case 'ping':
         send(ws, { t: 'pong', at: msg.at });
+        if (ws.role === 'player' && Number.isFinite(msg.rtt)) noteRtt(ws, msg.rtt);
         break;
     }
   });
@@ -213,18 +221,71 @@ function broadcastAll(obj) {
 // ---------------------------------------------------------------------------
 let tick = 0;
 let last = performance.now();
+let tickMaxMs = 0; // longest gap between ticks this second: shows if the machine can't keep up
 setInterval(() => {
   const now = performance.now();
+  tickMaxMs = Math.max(tickMaxMs, now - last);
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   tick++;
 
   const state = session.tick(dt);
-  if (state) broadcastTv({ ...state, tick });
+  if (state) broadcastTv({ ...state, tick, pads: pads() });
 
   // Per-player phone updates at ~10/s.
-  if (state && tick % 3 === 0) pushViews();
+  if (state && tick % Math.max(1, Math.round(TICK_HZ / VIEW_HZ)) === 0) pushViews();
 }, 1000 / TICK_HZ);
+
+/** Which buttons each phone holds right now, e.g. { '1': 'a', '2': '' }. Drives the overlay's press lights. */
+function pads() {
+  const out = {};
+  for (const p of lobby.players.values()) if (!p.bot) out[p.id] = (p.input.a ? 'a' : '') + (p.input.b ? 'b' : '');
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Latency stats for the TV overlay (press L on the TV).
+//   rtt:   phone -> server -> phone round trip, as the phone measured it (last + worst of ~10 s)
+//   gap:   longest silence between input messages this second. Phones send at least 30/s, so
+//          anything well above ~35 ms means Wi-Fi held packets back and then delivered them in a burst.
+// ---------------------------------------------------------------------------
+function netOf(ws) {
+  return (ws.net ??= { rtts: [], lastInputAt: 0, gapMax: 0, inputs: 0 });
+}
+function noteInput(ws) {
+  const n = netOf(ws);
+  const now = performance.now();
+  // Phones only send during action games, so a long pause is the lobby, not Wi-Fi.
+  if (n.lastInputAt && now - n.lastInputAt < 1000) n.gapMax = Math.max(n.gapMax, now - n.lastInputAt);
+  n.lastInputAt = now;
+  n.inputs++;
+}
+function noteRtt(ws, rtt) {
+  const n = netOf(ws);
+  n.rtts.push(Math.max(0, Math.min(rtt, 10_000)));
+  if (n.rtts.length > 10) n.rtts.shift();
+}
+setInterval(() => {
+  const players = [];
+  for (const c of wss.clients) {
+    if (c.role !== 'player' || !c.net) continue;
+    const n = c.net;
+    const p = lobby.players.get(c.playerId);
+    players.push({
+      id: c.playerId,
+      name: p?.name ?? '?',
+      color: p?.color ?? '#888',
+      rtt: n.rtts.at(-1) ?? null,
+      rttMax: n.rtts.length ? Math.max(...n.rtts) : null,
+      gapMax: Math.round(n.gapMax),
+      rate: n.inputs,
+    });
+    n.gapMax = 0;
+    n.inputs = 0;
+  }
+  broadcastTv({ t: 'net', tickHz: TICK_HZ, tickMaxMs: Math.round(tickMaxMs), players });
+  tickMaxMs = 0;
+}, 1000);
 
 function pushViews() {
   for (const c of wss.clients) {

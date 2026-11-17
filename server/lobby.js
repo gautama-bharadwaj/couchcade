@@ -89,18 +89,41 @@ export class Lobby {
     p.connected = false;
     p.lastSeen = Date.now();
     p.input = { x: 0, y: 0, a: false, b: false };
+    p.held = { a: false, b: false };
+    p.latched = { a: false, b: false };
   }
 
+  /**
+   * Latest input from a phone. Games read player.input on the next tick. A press that starts
+   * and ends between two ticks (a quick tap, or a down+up that Wi-Fi delivered together) is
+   * latched, so the game still sees the button down for one tick instead of missing it.
+   */
   setInput(id, input) {
     const p = this.players.get(id);
     if (!p) return;
+    p.held ??= { a: false, b: false };
+    p.latched ??= { a: false, b: false };
+    const a = !!input.a;
+    const b = !!input.b;
+    if (a && !p.held.a) p.latched.a = true;
+    if (b && !p.held.b) p.latched.b = true;
+    p.held = { a, b };
     p.input = {
       x: clamp(Number(input.x) || 0, -1, 1),
       y: clamp(Number(input.y) || 0, -1, 1),
-      a: !!input.a,
-      b: !!input.b,
+      a: a || p.latched.a,
+      b: b || p.latched.b,
     };
     p.lastSeen = Date.now();
+  }
+
+  /** After each game tick: latched presses have been seen once, so drop them. */
+  afterTick() {
+    for (const p of this.players.values()) {
+      if (!p.latched || (!p.latched.a && !p.latched.b)) continue;
+      p.latched = { a: false, b: false };
+      p.input = { ...p.input, a: p.held.a, b: p.held.b };
+    }
   }
 
   /** Drop players who have been gone longer than the grace period. Returns removed ids. */

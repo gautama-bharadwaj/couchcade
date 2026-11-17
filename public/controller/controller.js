@@ -8,7 +8,9 @@
 // Space = A, Shift = B. Use different browsers/private windows for more players.
 
 const $ = (id) => document.getElementById(id);
-const SEND_HZ = 30;
+const HEARTBEAT_HZ = 30; // resend the current input at least this often (keeps Wi-Fi awake too)
+const STICK_MIN_MS = 15; // joystick moves are sent at most ~60/s; button changes go out at once
+const PING_MS = 1000;
 const STICK_RADIUS = 60; // px of knob travel for full deflection
 
 const state = { x: 0, y: 0, a: false, b: false };
@@ -36,6 +38,7 @@ function connect() {
   ws.onopen = () => {
     $('conn').textContent = '';
     ws.send(JSON.stringify({ t: 'hello', role: 'player', name: localStorage.getItem('cc.name') ?? '', token: localStorage.getItem('cc.token') }));
+    rtt = null;
   };
 
   ws.onmessage = (ev) => {
@@ -56,6 +59,9 @@ function connect() {
         $('hudStatus').textContent = msg.data.status ?? '';
         if (msg.data.screen !== undefined) renderScreen(msg.data.screen);
         for (const el of document.querySelectorAll('.btn[data-key="a"]')) el.classList.toggle('dim', msg.data.dashReady === false);
+        break;
+      case 'pong':
+        rtt = Math.round(performance.now() - msg.at);
         break;
       case 'error':
         $('lobbyMsg').textContent = msg.message;
@@ -297,8 +303,10 @@ function buildButtons(controller) {
     el.textContent = label;
     const press = (down) => (e) => {
       e.preventDefault();
-      state[id] = down;
       el.classList.toggle('down', down);
+      if (state[id] === down) return;
+      state[id] = down;
+      sendInput(); // a press goes out now, not on the next heartbeat
       if (down) navigator.vibrate?.(15); // Android only
     };
     el.addEventListener('touchstart', press(true), { passive: false });
@@ -344,12 +352,14 @@ zone.addEventListener('touchmove', (e) => {
   state.x = dx / STICK_RADIUS;
   state.y = dy / STICK_RADIUS;
   placeStick(origin.x, origin.y, origin.x + dx, origin.y + dy);
+  sendStickSoon();
 }, { passive: false });
 
 const endStick = (e) => {
   if (![...e.changedTouches].some((t) => t.identifier === stickTouchId)) return;
   stickTouchId = null;
   state.x = state.y = 0;
+  sendInput();
   base.style.display = knob.style.display = 'none';
   hint.style.display = '';
 };
@@ -369,10 +379,14 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 
 // --- Keyboard (desktop testing) -----------------------------------------------------
 window.addEventListener('keydown', (e) => {
-  if (document.activeElement?.tagName === 'INPUT') return;
+  if (document.activeElement?.tagName === 'INPUT' || e.repeat) return;
   keys.add(e.code);
+  sendInput();
 });
-window.addEventListener('keyup', (e) => keys.delete(e.code));
+window.addEventListener('keyup', (e) => {
+  keys.delete(e.code);
+  sendInput();
+});
 window.addEventListener('blur', () => keys.clear());
 
 function keyboardInput() {
@@ -382,10 +396,35 @@ function keyboardInput() {
   return { x: x / len, y: y / len, a: keys.has('Space'), b: keys.has('ShiftLeft') || keys.has('ShiftRight') };
 }
 
-// --- Send loop -------------------------------------------------------------------------
-setInterval(() => {
+// --- Sending input ---------------------------------------------------------------------
+// Button presses and releases are sent the moment they happen. Joystick moves are sent as they
+// happen too, at most once per STICK_MIN_MS. A heartbeat resends the current state so the server
+// always has fresh input, and so the phone's Wi-Fi radio doesn't doze off between presses.
+let lastSentAt = 0;
+let stickTimer = 0;
+let rtt = null;
+
+function sendInput() {
+  clearTimeout(stickTimer);
+  stickTimer = 0;
   if (ws?.readyState !== WebSocket.OPEN || phase?.phase !== 'playing' || phase.controller?.type === 'screens') return;
   const k = keyboardInput();
   const out = k.x || k.y || k.a || k.b ? k : state;
   ws.send(JSON.stringify({ t: 'input', x: +out.x.toFixed(3), y: +out.y.toFixed(3), a: out.a, b: out.b }));
-}, 1000 / SEND_HZ);
+  lastSentAt = performance.now();
+}
+
+function sendStickSoon() {
+  const wait = STICK_MIN_MS - (performance.now() - lastSentAt);
+  if (wait <= 0) sendInput();
+  else if (!stickTimer) stickTimer = setTimeout(sendInput, wait);
+}
+
+setInterval(() => {
+  if (performance.now() - lastSentAt >= 1000 / HEARTBEAT_HZ - 2) sendInput();
+}, 1000 / HEARTBEAT_HZ / 2);
+
+// Round-trip time to the server. The last one rides along so the TV's latency overlay (L) can show it.
+setInterval(() => {
+  if (ws?.readyState === WebSocket.OPEN && me) ws.send(JSON.stringify({ t: 'ping', at: performance.now(), rtt }));
+}, PING_MS);

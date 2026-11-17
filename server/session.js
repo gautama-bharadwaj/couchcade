@@ -101,6 +101,7 @@ export class Session {
   tick(dt) {
     if (this.phase === 'playing') {
       this.game.update(dt);
+      this.lobby.afterTick();
       if (this.game.isOver()) {
         this.results = this.game.results();
         this.phase = 'results';

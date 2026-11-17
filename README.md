@@ -22,7 +22,7 @@ npm run dev        # restarts automatically when you edit server files
 2. The host picks a game on their phone and taps **Start**.
 3. When the game ends, everyone sees the results, then it goes back to the lobby.
 
-TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game.
+TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay.
 
 ### Sound
 
@@ -49,7 +49,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 ## Architecture
 
 ```
-phones ──input 30/s──▶  server  ──state 30/s──▶  TV page (canvas, 60 fps)
+phones ──input on every press (+30/s)──▶  server  ──state 60/s──▶  TV page (canvas, 60 fps)
                          │
                          ├─ lobby.js     players, colours, host, reconnect tokens
                          ├─ session.js   lobby → playing → results → lobby
@@ -58,9 +58,13 @@ phones ──input 30/s──▶  server  ──state 30/s──▶  TV page (ca
 
 The server is the only place game logic runs. The TV just draws snapshots, and phones just send inputs.
 
+### Latency
+
+Press **L** on the TV during an action game to see, per phone: the round trip to the server, the longest Wi-Fi stall in the last second, and an estimate of press-to-screen time. A square next to each name lights up when the server sees that phone hold a button. To measure the true end-to-end delay, film the phone and the TV together in slow motion and count frames between the phone's button lighting and the square. The code path adds about 35 ms (send on press, a 60 Hz tick, a 25 ms smoothing buffer on the TV); the rest is Wi-Fi and the TV's own picture processing, so switch the TV to **Game mode**. Phones send presses the instant they happen, and the server holds a quick tap for at least one tick so it is never missed.
+
 ```
 server/
-  index.js            HTTP (pages + QR) and WebSocket hub, 30 Hz loop
+  index.js            HTTP (pages + QR) and WebSocket hub, 60 Hz loop
   lobby.js            who's here
   session.js          shared game flow (pick, start, results)
   arena.js            1600x900 logical canvas shared by all games

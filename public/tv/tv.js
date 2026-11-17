@@ -2,7 +2,7 @@
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
 // Keys (Mac keyboard / later a keyboard on the Pi):
-//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · Esc end game / skip results · F full screen · J join card during a game
+//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game
 
 import { renderers } from './games/index.js';
 import audio from './audio.js';
@@ -16,17 +16,20 @@ let arena = { w: 1600, h: 900 };
 let phase = null; // latest {t:'phase', ...} message
 let joinUrl = '';
 
-// Snapshot buffer for interpolation: render ~1.5 ticks in the past and blend
-// the two snapshots around that moment, so 30 Hz updates look smooth at 60 fps.
-const TICK_MS = 1000 / 30;
-const RENDER_DELAY_MS = TICK_MS * 1.5;
+// Snapshot buffer for interpolation: render ~1.5 ticks in the past and blend the two
+// snapshots around that moment, so updates look smooth at any frame rate. This delay is part
+// of the press-to-screen time, so it follows the server's tick rate (60/s → 25 ms).
+let renderDelayMs = 1.5 * (1000 / 60);
 const snapshots = [];
+let net = null; // latest {t:'net'} latency stats
+let showNet = false;
 
 // --- Join info -----------------------------------------------------------------
 fetch('/api/join-info')
   .then((r) => r.json())
   .then((info) => {
     arena = info.arena;
+    if (info.tickHz) renderDelayMs = 1.5 * (1000 / info.tickHz);
     joinUrl = info.url.replace(/\/$/, '');
     $('qr').innerHTML = info.qrSvg;
     $('qrSmall').innerHTML = info.qrSvg;
@@ -46,10 +49,12 @@ function connect() {
     if (msg.t === 'state') {
       const prevSnap = snapshots.at(-1);
       onSnapshot(msg, prevSnap?.gameId === msg.gameId ? prevSnap.data : null);
-      snapshots.push({ at: performance.now(), gameId: msg.gameId, data: msg.data });
-      if (snapshots.length > 10) snapshots.shift();
+      snapshots.push({ at: performance.now(), gameId: msg.gameId, data: msg.data, pads: msg.pads });
+      if (snapshots.length > 20) snapshots.shift();
     } else if (msg.t === 'phase') {
       onPhase(msg);
+    } else if (msg.t === 'net') {
+      net = msg;
     } else if (msg.t === 'pong') {
       pingMs = Math.round(performance.now() - msg.at);
     }
@@ -142,14 +147,14 @@ resize();
 /** Two snapshots around (now - delay) and how far between them we are. */
 function sample() {
   if (snapshots.length === 0) return null;
-  const renderAt = performance.now() - RENDER_DELAY_MS;
+  const renderAt = performance.now() - renderDelayMs;
   for (let i = snapshots.length - 1; i > 0; i--) {
     const a = snapshots[i - 1];
     const b = snapshots[i];
-    if (a.at <= renderAt && renderAt <= b.at) return { prev: a.data, cur: b.data, alpha: (renderAt - a.at) / (b.at - a.at || 1), gameId: b.gameId };
+    if (a.at <= renderAt && renderAt <= b.at) return { prev: a.data, cur: b.data, alpha: (renderAt - a.at) / (b.at - a.at || 1), gameId: b.gameId, pads: b.pads };
   }
   const last = snapshots.at(-1);
-  return { prev: last.data, cur: last.data, alpha: 1, gameId: last.gameId };
+  return { prev: last.data, cur: last.data, alpha: 1, gameId: last.gameId, pads: last.pads };
 }
 
 function frame() {
@@ -157,6 +162,7 @@ function frame() {
   const renderer = s && renderers[s.gameId];
   if (phase?.phase !== 'lobby' && renderer) {
     renderer.draw(ctx, { prev: s.prev, cur: s.cur, alpha: s.alpha, arena, now: performance.now() });
+    if (showNet) drawNet(s.pads);
   } else {
     ctx.fillStyle = '#0d0f14';
     ctx.fillRect(0, 0, arena.w, arena.h);
@@ -167,6 +173,66 @@ function frame() {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// --- Latency overlay (L) ------------------------------------------------------------
+// Per phone: round trip to the server, the worst Wi-Fi stall this second, and an estimate of
+// press-to-screen time. The light next to each name turns on when the server sees that phone
+// hold a button, drawn through the same buffer as the game. Film the phone and TV together in
+// slow motion and count frames between the button lighting on the phone and here: that is the
+// true number, including the TV's own picture processing, which no code can see.
+function drawNet(pads) {
+  const rows = net?.players ?? [];
+  const x = 80;
+  const y = 110; // below the game's own title line
+  const w = 800;
+  const rowH = 40;
+  const h = 82 + Math.max(1, rows.length) * rowH + 60;
+  ctx.save();
+  ctx.fillStyle = 'rgba(8, 10, 16, 0.86)';
+  ctx.fillRect(x, y, w, h);
+  ctx.font = '600 20px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e8ecf5';
+  ctx.fillText('Latency  (L to hide)', x + 20, y + 26);
+  ctx.font = '16px system-ui, sans-serif';
+  ctx.fillStyle = '#8b93a8';
+  const tickMs = 1000 / (net?.tickHz ?? 60);
+  ctx.fillText(`Server ${net?.tickHz ?? '?'} ticks/s, slowest ${net?.tickMaxMs ?? '?'} ms · TV buffer ${Math.round(renderDelayMs)} ms`, x + 20, y + 54);
+  ctx.fillText('ping (worst)', x + 300, y + 82);
+  ctx.fillText('Wi-Fi stall', x + 480, y + 82);
+  ctx.fillText('press → screen*', x + 640, y + 82);
+  if (!rows.length) ctx.fillText('No phones sending input yet.', x + 20, y + 82 + rowH);
+  rows.forEach((p, i) => {
+    const ry = y + 82 + (i + 1) * rowH;
+    const held = pads?.[p.id];
+    ctx.fillStyle = held ? p.color : 'rgba(255,255,255,0.08)';
+    ctx.fillRect(x + 20, ry - 14, 28, 28);
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 20, ry - 14, 28, 28);
+    ctx.fillStyle = '#e8ecf5';
+    ctx.font = '600 18px system-ui, sans-serif';
+    ctx.fillText(p.name.slice(0, 14), x + 62, ry);
+    ctx.font = '18px system-ui, sans-serif';
+    const est = p.rtt == null ? null : Math.round(p.rtt / 2 + tickMs / 2 + renderDelayMs + 8);
+    ctx.fillStyle = latColor(p.rttMax, 30, 80);
+    ctx.fillText(p.rtt == null ? '…' : `${p.rtt} ms (${p.rttMax})`, x + 300, ry);
+    ctx.fillStyle = latColor(p.gapMax, 50, 120);
+    ctx.fillText(`${p.gapMax} ms`, x + 480, ry);
+    ctx.fillStyle = '#e8ecf5';
+    ctx.fillText(est == null ? '…' : `≈ ${est} ms`, x + 640, ry);
+  });
+  ctx.font = '14px system-ui, sans-serif';
+  ctx.fillStyle = '#6b7390';
+  ctx.fillText('* code + Wi-Fi only. Add the TV\'s own lag (often 15–30 ms in Game mode, 50–150 ms without).', x + 20, y + h - 14);
+  ctx.restore();
+}
+
+function latColor(ms, ok, bad) {
+  if (ms == null) return '#8b93a8';
+  return ms <= ok ? '#4cd97b' : ms <= bad ? '#ffc93c' : '#ff5a5f';
+}
 
 // --- Sound ---------------------------------------------------------------------------
 // Renderers may export onSnapshot(prev, cur, audio) to play sounds when the game state changes.
@@ -211,6 +277,7 @@ window.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
   unlockSound();
   if (key === 'm') showToast(audio.toggleMute() ? 'Sound muted' : 'Sound on');
+  if (key === 'l') showToast((showNet = !showNet) ? 'Latency overlay on' : 'Latency overlay off');
   if (key === 'n') showToast(audio.toggleNarrator() ? 'Narrator on' : 'Narrator off');
   if (key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   if (key === 'j' && phase?.phase === 'playing') $('joinSmall').classList.toggle('show');
