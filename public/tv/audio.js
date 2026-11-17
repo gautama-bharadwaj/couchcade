@@ -220,6 +220,26 @@ export const sfx = {
   },
   sizzle: () => noise(0.35, { type: 'highpass', freq: 2500, gain: 0.18 }),
   drop: () => tone(900, 0.5, { type: 'sine', slideTo: 500, gain: 0.08 }),
+
+  // Fuse
+  snip: () => {
+    noise(0.04, { type: 'highpass', freq: 5000, gain: 0.35 });
+    tone(2600, 0.05, { type: 'square', slideTo: 1800, gain: 0.08 });
+  },
+  splash: () => {
+    noise(0.6, { type: 'bandpass', freq: 1800, slideTo: 400, q: 0.6, gain: 0.35, attack: 0.01 });
+    noise(0.9, { type: 'highpass', freq: 3500, gain: 0.12, at: 0.25, attack: 0.1 }); // steam hiss
+  },
+  fizzle: () => {
+    noise(0.05, { type: 'bandpass', freq: 1500, gain: 0.4 });
+    tone(900, 0.6, { type: 'triangle', slideTo: 120, gain: 0.12, at: 0.05 });
+    noise(0.7, { type: 'highpass', freq: 3000, slideTo: 1200, gain: 0.08, at: 0.05 });
+  },
+  quack: () => {
+    tone(520, 0.12, { type: 'sawtooth', slideTo: 380, gain: 0.12 });
+    tone(500, 0.14, { type: 'sawtooth', slideTo: 340, gain: 0.12, at: 0.16 });
+  },
+  fuseHiss: (level = 0.5) => noise(0.3, { type: 'highpass', freq: 3500 + 2500 * level, gain: 0.04 + 0.06 * level }),
 };
 
 // ---- Ambience ---------------------------------------------------------------------
