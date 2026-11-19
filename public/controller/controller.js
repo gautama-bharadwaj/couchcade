@@ -87,6 +87,17 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && joined && ws?.readyState !== WebSocket.OPEN) connect();
 });
 
+// Script errors go to the server log (a few per minute at most) so phone problems can be debugged
+// without plugging the phone into a computer.
+let errorsSent = 0;
+setInterval(() => (errorsSent = 0), 60_000);
+function reportError(message) {
+  if (errorsSent++ >= 5) return;
+  cmd({ t: 'clientError', message: `${String(message).slice(0, 400)} (${navigator.userAgent.slice(0, 80)})` });
+}
+window.addEventListener('error', (e) => reportError(`${e.message} at ${e.filename?.split('/').pop()}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => reportError(`unhandled rejection: ${e.reason?.stack ?? e.reason}`));
+
 function cmd(obj) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }

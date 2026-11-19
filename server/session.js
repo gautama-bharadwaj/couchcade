@@ -8,6 +8,7 @@
 
 import { ARENA } from './arena.js';
 import { GAMES, gamesById, gameList } from './games/index.js';
+import { log } from './log.js';
 
 const RESULTS_MS = 8000;
 
@@ -62,6 +63,8 @@ export class Session {
     this.game = this.def.create({ players: this.lobby.players, arena: ARENA });
     this.results = null;
     this.phase = 'playing';
+    this.startedAt = Date.now();
+    log.info('session', `${this.def.title} started with ${n} players`, this.lobby.summary().map((p) => `${p.name}${p.connected ? '' : ' (away)'}`));
     this.changed();
     return {};
   }
@@ -85,10 +88,31 @@ export class Session {
     if (this.phase === 'playing') {
       this.results = this.game.results();
       this.game = null;
+      log.info('session', `${this.def.title} ended early by the host after ${this.minutes()}`);
       this.toLobby();
     } else if (this.phase === 'results') {
       this.toLobby();
     }
+  }
+
+  /** A game threw. Drop it and go back to the lobby so everyone can keep playing something. */
+  abort(title) {
+    if (this.phase !== 'playing') return;
+    let standings = [];
+    try {
+      standings = this.game?.results()?.standings ?? [];
+    } catch {}
+    this.results = { title, standings };
+    log.warn('session', `${this.def.title} aborted after ${this.minutes()}`);
+    this.game = null;
+    this.phase = 'results'; // show what happened, then back to the lobby as usual
+    this.resultsUntil = Date.now() + RESULTS_MS;
+    this.changed();
+  }
+
+  minutes() {
+    const s = Math.round((Date.now() - (this.startedAt ?? Date.now())) / 1000);
+    return s < 90 ? `${s} s` : `${Math.round(s / 60)} min`;
   }
 
   toLobby() {
@@ -105,6 +129,7 @@ export class Session {
       if (this.game.isOver()) {
         this.results = this.game.results();
         this.phase = 'results';
+        log.info('session', `${this.def.title} finished after ${this.minutes()}: ${this.results?.title ?? ''}`);
         this.resultsUntil = Date.now() + RESULTS_MS;
         this.game = null;
         this.changed();

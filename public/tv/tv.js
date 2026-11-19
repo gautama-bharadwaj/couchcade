@@ -67,6 +67,17 @@ function connect() {
 connect();
 setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ t: 'ping', at: performance.now() })), 2000);
 
+// Script errors go to the server log (a few per minute at most), so a TV problem shows up in
+// logs/couchcade.log instead of only in a console nobody has open.
+let errorsSent = 0;
+setInterval(() => (errorsSent = 0), 60_000);
+function reportError(message) {
+  if (errorsSent++ >= 5) return;
+  sendCmd({ t: 'clientError', message: String(message).slice(0, 500) });
+}
+window.addEventListener('error', (e) => reportError(`${e.message} at ${e.filename?.split('/').pop()}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => reportError(`unhandled rejection: ${e.reason?.stack ?? e.reason}`));
+
 function sendCmd(obj) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }
@@ -132,14 +143,20 @@ function renderResults(results) {
 }
 
 // --- Rendering -------------------------------------------------------------------
+// The canvas is drawn at most 1.6x the 1600x900 arena (2560x1440 pixels). A 4K TV on a Mac
+// would otherwise get a 3840x2160 canvas: 2.25x the pixels to fill every frame, for detail
+// nobody sees from the couch, and enough to drop frames on a Raspberry Pi. The browser
+// stretches it to fill the screen. /tv?res=2 raises the cap, /tv?res=1 lowers it for slow machines.
+const MAX_RES = Number(new URLSearchParams(location.search).get('res')) || 1.6;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
   const scale = Math.min(window.innerWidth / arena.w, window.innerHeight / arena.h);
+  const px = Math.min(scale * dpr, MAX_RES);
   canvas.style.width = `${arena.w * scale}px`;
   canvas.style.height = `${arena.h * scale}px`;
-  canvas.width = Math.round(arena.w * scale * dpr);
-  canvas.height = Math.round(arena.h * scale * dpr);
-  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  canvas.width = Math.round(arena.w * px);
+  canvas.height = Math.round(arena.h * px);
+  ctx.setTransform(px, 0, 0, px, 0, 0);
 }
 window.addEventListener('resize', resize);
 resize();
@@ -158,10 +175,17 @@ function sample() {
 }
 
 function frame() {
+  requestAnimationFrame(frame); // first, so one bad frame can't stop the TV for good
   const s = sample();
   const renderer = s && renderers[s.gameId];
   if (phase?.phase !== 'lobby' && renderer) {
-    renderer.draw(ctx, { prev: s.prev, cur: s.cur, alpha: s.alpha, arena, now: performance.now() });
+    try {
+      renderer.draw(ctx, { prev: s.prev, cur: s.cur, alpha: s.alpha, arena, now: performance.now() });
+    } catch (err) {
+      console.error(err);
+      reportError(`${s.gameId} draw: ${err?.stack ?? err}`);
+      resize(); // also resets the canvas state the renderer may have left half-changed
+    }
     if (showNet) drawNet(s.pads);
   } else {
     ctx.fillStyle = '#0d0f14';
@@ -169,8 +193,8 @@ function frame() {
   }
 
   const connected = ws?.readyState === WebSocket.OPEN;
-  statusEl.textContent = connected ? `Connected${pingMs != null ? ` · ${pingMs} ms` : ''}` : statusEl.textContent;
-  requestAnimationFrame(frame);
+  const status = connected ? `Connected${pingMs != null ? ` · ${pingMs} ms` : ''}` : statusEl.textContent;
+  if (statusEl.textContent !== status) statusEl.textContent = status; // no DOM write per frame
 }
 requestAnimationFrame(frame);
 
@@ -243,6 +267,7 @@ function onSnapshot(msg, prevData) {
     renderer.onSnapshot(prevData, msg.data, audio);
   } catch (err) {
     console.error('sound hook failed', err);
+    reportError(`${msg.gameId} sound hook: ${err?.message}`);
   }
 }
 
