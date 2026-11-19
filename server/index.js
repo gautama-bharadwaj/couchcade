@@ -4,7 +4,9 @@ import path from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
+import { log } from './log.js';
 import { Lobby, MAX_PLAYERS } from './lobby.js';
 import { Session } from './session.js';
 import { ARENA } from './arena.js';
@@ -14,6 +16,12 @@ const PORT = Number(process.env.PORT) || 3000;
 // TICK_HZ=30 npm start halves the CPU work if a small machine struggles.
 const TICK_HZ = Number(process.env.TICK_HZ) || 60;
 const VIEW_HZ = 10; // phone status updates
+// A TV that falls this far behind (a frozen or throttled tab) skips frames instead of queueing
+// them, so it catches up to the present the moment it recovers. Same idea for phones, smaller.
+const TV_BACKLOG_BYTES = 64 * 1024;
+const PHONE_BACKLOG_BYTES = 16 * 1024;
+// Turn-based games often don't change for many ticks; the TV then gets a repeat at least this often.
+const TV_KEEPALIVE_MS = 1000;
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 // ---------------------------------------------------------------------------
@@ -68,6 +76,11 @@ const server = http.createServer(async (req, res) => {
       const qrSvg = await QRCode.toString(JOIN_URL, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
       return sendJson(res, { url: JOIN_URL, qrSvg, maxPlayers: MAX_PLAYERS, arena: ARENA, tickHz: TICK_HZ });
     }
+    if (url.pathname === '/api/logs') {
+      // Recent log lines plus live numbers, for debugging from any browser on the Wi-Fi.
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(`${statsLine()}\n\nLog level: ${log.level} · file: ${log.file ?? 'off'}\n\n${log.recent()}`);
+    }
 
     const rel = ROUTES[url.pathname] ?? url.pathname;
     const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
@@ -82,7 +95,7 @@ const server = http.createServer(async (req, res) => {
     });
     res.end(await readFile(filePath));
   } catch (err) {
-    console.error(err);
+    log.error('http', `${req.method} ${req.url} failed`, err);
     res.writeHead(500).end('Server error');
   }
 });
@@ -105,96 +118,66 @@ function notFound(res) {
 //                     {t:'select', gameId} {t:'start'} {t:'end'}   host phone or TV only
 //                     {t:'addBot'} {t:'removeBot'}                 host phone or TV, lobby only
 //                     {t:'ping', at, rtt?}                  rtt = player's last measured round trip
+//                     {t:'clientError', message}            TV or phone script error, for the server log
 //   server -> player  {t:'welcome', id, token, name, color} | {t:'full'}
-//                     {t:'you', data}                       game's playerView, ~10/s
+//                     {t:'you', data}                       game's playerView, ~10/s, only when it changed
 //   server -> all     {t:'phase', phase, gameId, games, controller, hostId, players, results}
-//   server -> tv      {t:'state', gameId, data, pads}       game snapshot, TICK_HZ; pads = buttons held per player
+//   server -> tv      {t:'state', gameId, data, pads}       game snapshot, up to TICK_HZ (unchanged ones are skipped,
+//                                                           with a repeat every TV_KEEPALIVE_MS); pads = buttons held
 //   server -> tv      {t:'net', tickHz, tickMaxMs, players}  latency stats, 1/s (the TV's L overlay)
 //   server -> any     {t:'pong', at} | {t:'error', message}
 // ---------------------------------------------------------------------------
-const wss = new WebSocketServer({ server, path: '/ws' });
+// Small, frequent messages: no compression (it costs CPU and adds delay). ws already turns off
+// Nagle's algorithm (TCP_NODELAY) on every socket, so a press is never held back to batch it.
+const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: false, maxPayload: 16 * 1024 });
 const lobby = new Lobby();
-const session = new Session(lobby, (msg) => broadcastAll(msg));
+const session = new Session(lobby, (msg) => {
+  // A phase change can swap the phone's screen; make sure every phone gets a fresh view after it.
+  for (const c of wss.clients) c.lastView = null;
+  broadcastAll(msg);
+  if (msg.phase === 'playing') queueViews();
+});
 const tvs = new Set();
 
 wss.on('connection', (ws, req) => {
   ws.role = null;
   ws.playerId = null;
   ws.isAlive = true;
+  ws.lastView = null; // last 'you' JSON sent, so unchanged views aren't resent
+  const addr = req.socket.remoteAddress;
   ws.on('pong', () => (ws.isAlive = true));
+  ws.on('error', (err) => log.warn('ws', `socket error from ${addr}`, err.message));
 
   ws.on('message', (raw) => {
+    stats.msgsIn++;
     let msg;
     try {
       msg = JSON.parse(raw);
     } catch {
+      if (log.every('bad-json', 10_000)) log.warn('ws', `unreadable message from ${addr}`);
       return;
     }
-
-    switch (msg.t) {
-      case 'hello':
-        if (msg.role === 'tv') {
-          ws.role = 'tv';
-          tvs.add(ws);
-          send(ws, session.phaseMessage());
-          console.log(`TV connected (${req.socket.remoteAddress})`);
-        } else if (msg.role === 'player') {
-          const result = lobby.join(msg.name, msg.token);
-          if (result.error) return send(ws, { t: 'full' });
-          const p = result.player;
-          // If this player was connected on another socket (old tab), close it.
-          for (const other of wss.clients) {
-            if (other !== ws && other.playerId === p.id) other.close(4000, 'replaced');
-          }
-          ws.role = 'player';
-          ws.playerId = p.id;
-          send(ws, { t: 'welcome', id: p.id, token: p.token, name: p.name, color: p.color });
-          session.changed(); // everyone sees the new player list
-          console.log(`${result.rejoined ? 'Rejoined' : 'Joined'}: ${p.name} (#${p.id}) from ${req.socket.remoteAddress}`);
-        }
-        break;
-
-      case 'input':
-        if (ws.role === 'player') {
-          lobby.setInput(ws.playerId, msg);
-          noteInput(ws);
-        }
-        break;
-
-      case 'act':
-        if (ws.role === 'player' && session.action(ws.playerId, msg)) pushViews();
-        break;
-
-      case 'select':
-      case 'start':
-      case 'end':
-      case 'addBot':
-      case 'removeBot': {
-        const isHost = ws.role === 'tv' || (ws.role === 'player' && ws.playerId === lobby.hostId());
-        if (!isHost) return send(ws, { t: 'error', message: 'Only the host can do that' });
-        const r =
-          msg.t === 'select' ? session.select(msg.gameId)
-          : msg.t === 'start' ? session.start()
-          : msg.t === 'addBot' ? session.addBot()
-          : msg.t === 'removeBot' ? session.removeBot()
-          : session.end();
-        if (r?.error) send(ws, { t: 'error', message: r.error });
-        break;
-      }
-
-      case 'ping':
-        send(ws, { t: 'pong', at: msg.at });
-        if (ws.role === 'player' && Number.isFinite(msg.rtt)) noteRtt(ws, msg.rtt);
-        break;
+    if (!msg || typeof msg !== 'object') return;
+    try {
+      onMessage(ws, msg, addr);
+    } catch (err) {
+      // A bug in a game's onAction or the lobby must not take the whole server down mid-party.
+      const n = log.every(`msg-error:${msg.t}`, 5000);
+      if (n) log.error('ws', `handling '${msg.t}' failed${n > 1 ? ` (${n - 1} more since last report)` : ''}`, err);
     }
   });
 
-  ws.on('close', () => {
-    if (ws.role === 'tv') tvs.delete(ws);
+  ws.on('close', (code) => {
+    if (ws.role === 'tv') {
+      tvs.delete(ws);
+      log.info('tv', `TV disconnected (${addr}, code ${code})`);
+    }
     if (ws.role === 'player' && ws.playerId) {
       // Only mark offline if no newer socket took over this player.
       const stillConnected = [...wss.clients].some((c) => c !== ws && c.playerId === ws.playerId);
       if (!stillConnected) {
+        const p = lobby.players.get(ws.playerId);
+        log.info('lobby', `Disconnected: ${p?.name ?? '?'} (#${ws.playerId}, code ${code})`);
         lobby.disconnect(ws.playerId);
         session.changed();
       }
@@ -202,18 +185,124 @@ wss.on('connection', (ws, req) => {
   });
 });
 
+function onMessage(ws, msg, addr) {
+  switch (msg.t) {
+    case 'hello':
+      if (ws.role) return; // one hello per socket; a second could leave a ghost player behind
+      if (msg.role === 'tv') {
+        ws.role = 'tv';
+        tvs.add(ws);
+        lastTvSentAt = 0; // the new TV needs a snapshot now, even if the game hasn't changed
+        send(ws, session.phaseMessage());
+        log.info('tv', `TV connected (${addr})`);
+      } else if (msg.role === 'player') {
+        const result = lobby.join(msg.name, msg.token);
+        if (result.error) {
+          log.info('lobby', `Turned away ${addr}: the game is full`);
+          return send(ws, { t: 'full' });
+        }
+        const p = result.player;
+        // If this player was connected on another socket (old tab), close it.
+        for (const other of wss.clients) {
+          if (other !== ws && other.playerId === p.id) other.close(4000, 'replaced');
+        }
+        ws.role = 'player';
+        ws.playerId = p.id;
+        send(ws, { t: 'welcome', id: p.id, token: p.token, name: p.name, color: p.color });
+        session.changed(); // everyone sees the new player list
+        log.info('lobby', `${result.rejoined ? 'Rejoined' : 'Joined'}: ${p.name} (#${p.id}) from ${addr}`);
+      }
+      break;
+
+    case 'input':
+      if (ws.role === 'player') {
+        lobby.setInput(ws.playerId, msg);
+        noteInput(ws);
+      }
+      break;
+
+    case 'act':
+      if (log.debugOn) log.debug('act', `#${ws.playerId} ${String(msg.key).slice(0, 40)}`, msg.value === undefined ? undefined : String(msg.value).slice(0, 40));
+      if (ws.role === 'player' && session.action(ws.playerId, msg)) queueViews();
+      break;
+
+    case 'select':
+    case 'start':
+    case 'end':
+    case 'addBot':
+    case 'removeBot': {
+      const isHost = ws.role === 'tv' || (ws.role === 'player' && ws.playerId === lobby.hostId());
+      if (!isHost) {
+        log.debug('host', `refused '${msg.t}' from non-host #${ws.playerId ?? '?'}`);
+        return send(ws, { t: 'error', message: 'Only the host can do that' });
+      }
+      const r =
+        msg.t === 'select' ? session.select(msg.gameId)
+        : msg.t === 'start' ? session.start()
+        : msg.t === 'addBot' ? session.addBot()
+        : msg.t === 'removeBot' ? session.removeBot()
+        : session.end();
+      if (r?.error) send(ws, { t: 'error', message: r.error });
+      else if (log.debugOn) log.debug('host', `${msg.t}${msg.t === 'select' ? ` ${msg.gameId}` : ''} by ${ws.role === 'tv' ? 'TV' : `#${ws.playerId}`}`);
+      break;
+    }
+
+    case 'ping':
+      send(ws, { t: 'pong', at: msg.at });
+      if (ws.role === 'player' && Number.isFinite(msg.rtt)) noteRtt(ws, msg.rtt);
+      break;
+
+    case 'clientError': {
+      // Script errors from the TV page or a phone. Sampled, so a page throwing every frame can't flood the log.
+      const who = ws.role === 'tv' ? 'TV' : ws.role === 'player' ? `#${ws.playerId}` : addr;
+      const n = log.every(`client-error:${who}`, 10_000);
+      if (n) log.warn('client', `${who}: ${String(msg.message).slice(0, 500)}${n > 1 ? ` (${n - 1} more since last report)` : ''}`);
+      break;
+    }
+  }
+}
+
+function rawSend(ws, data) {
+  ws.send(data);
+  stats.msgsOut++;
+  stats.bytesOut += data.length;
+}
+
 function send(ws, obj) {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+  if (ws.readyState === ws.OPEN) rawSend(ws, JSON.stringify(obj));
 }
 
 function broadcastTv(obj) {
   const data = JSON.stringify(obj);
-  for (const tv of tvs) if (tv.readyState === tv.OPEN) tv.send(data);
+  for (const tv of tvs) if (tv.readyState === tv.OPEN) rawSend(tv, data);
 }
 
 function broadcastAll(obj) {
   const data = JSON.stringify(obj);
-  for (const c of wss.clients) if (c.role && c.readyState === c.OPEN) c.send(data);
+  for (const c of wss.clients) if (c.role && c.readyState === c.OPEN) rawSend(c, data);
+}
+
+// TV snapshots. Card games change a few times a second at most, so most ticks would resend the
+// same JSON; skip those (with a repeat now and then, in case anything was missed).
+let lastTvData = '';
+let lastTvSentAt = 0;
+function sendTvState(state) {
+  if (!tvs.size) return;
+  const body = JSON.stringify(state.data);
+  const now = performance.now();
+  if (body === lastTvData && now - lastTvSentAt < TV_KEEPALIVE_MS) return;
+  lastTvData = body;
+  lastTvSentAt = now;
+  // Built by hand so the snapshot is stringified once, not once for the check and again to send.
+  const data = `{"t":"state","gameId":${JSON.stringify(state.gameId)},"tick":${tick},"pads":${JSON.stringify(pads())},"data":${body}}`;
+  for (const tv of tvs) {
+    if (tv.readyState !== tv.OPEN) continue;
+    if (tv.bufferedAmount > TV_BACKLOG_BYTES) {
+      stats.tvSkipped++;
+      continue;
+    }
+    rawSend(tv, data);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -224,16 +313,35 @@ let last = performance.now();
 let tickMaxMs = 0; // longest gap between ticks this second: shows if the machine can't keep up
 setInterval(() => {
   const now = performance.now();
-  tickMaxMs = Math.max(tickMaxMs, now - last);
-  const dt = Math.min((now - last) / 1000, 0.1);
+  const gap = now - last;
+  tickMaxMs = Math.max(tickMaxMs, gap);
+  stats.gapMax = Math.max(stats.gapMax, gap);
+  const dt = Math.min(gap / 1000, 0.1);
   last = now;
   tick++;
 
-  const state = session.tick(dt);
-  if (state) broadcastTv({ ...state, tick, pads: pads() });
+  let state = null;
+  try {
+    state = session.tick(dt);
+  } catch (err) {
+    // A game bug ends that game (back to the lobby) instead of crashing the server for everyone.
+    log.error('game', `${session.selectedId} crashed during a tick; ending it`, err);
+    session.abort('Game stopped after an error');
+    return;
+  }
+  if (state) sendTvState(state);
 
   // Per-player phone updates at ~10/s.
   if (state && tick % Math.max(1, Math.round(TICK_HZ / VIEW_HZ)) === 0) pushViews();
+
+  const work = performance.now() - now;
+  stats.ticks++;
+  stats.workSum += work;
+  if (work > stats.workMax) stats.workMax = work;
+  if (work > 8) {
+    const n = log.every('slow-tick', 5000);
+    if (n) log.warn('tick', `slow tick: ${work.toFixed(1)} ms of work in ${session.selectedId}${n > 1 ? ` (${n - 1} more since last report)` : ''}`);
+  }
 }, 1000 / TICK_HZ);
 
 /** Which buttons each phone holds right now, e.g. { '1': 'a', '2': '' }. Drives the overlay's press lights. */
@@ -287,20 +395,86 @@ setInterval(() => {
   tickMaxMs = 0;
 }, 1000);
 
+// Phone views. Only changed views go out: in card games most phones' screens don't change
+// between updates, and every message costs Wi-Fi airtime that the other phones' presses need.
 function pushViews() {
+  viewsQueued = false;
   for (const c of wss.clients) {
-    if (c.role !== 'player') continue;
-    const data = session.playerView(c.playerId);
-    if (data) send(c, { t: 'you', data });
+    if (c.role !== 'player' || c.readyState !== c.OPEN) continue;
+    let data;
+    try {
+      data = session.playerView(c.playerId);
+    } catch (err) {
+      const n = log.every('view-error', 5000);
+      if (n) log.error('game', `${session.selectedId} playerView failed`, err);
+      continue;
+    }
+    if (!data) continue;
+    const json = JSON.stringify({ t: 'you', data });
+    if (json === c.lastView) continue;
+    // Wi-Fi is stalled for this phone: leave lastView alone so the newest view goes out once it drains.
+    if (c.bufferedAmount > PHONE_BACKLOG_BYTES) {
+      stats.viewsSkipped++;
+      continue;
+    }
+    c.lastView = json;
+    rawSend(c, json);
   }
 }
+
+// After a tap, everyone's view is refreshed right away, but taps that arrive together (bots
+// acting in the same tick, several phones at once) share one refresh.
+let viewsQueued = false;
+function queueViews() {
+  if (viewsQueued) return;
+  viewsQueued = true;
+  setImmediate(pushViews);
+}
+
+// ---------------------------------------------------------------------------
+// Server health, for the log and /api/logs. Plain counters: no work per message beyond an add.
+// ---------------------------------------------------------------------------
+const loopDelay = monitorEventLoopDelay({ resolution: 10 });
+loopDelay.enable();
+const stats = { since: performance.now(), msgsIn: 0, msgsOut: 0, bytesOut: 0, ticks: 0, workSum: 0, workMax: 0, gapMax: 0, tvSkipped: 0, viewsSkipped: 0 };
+
+function statsLine() {
+  const secs = Math.max(0.001, (performance.now() - stats.since) / 1000);
+  const phones = [...wss.clients].filter((c) => c.role === 'player').length;
+  const players = lobby.players.size;
+  const bots = [...lobby.players.values()].filter((p) => p.bot).length;
+  return (
+    `${session.phase}${session.phase === 'lobby' ? '' : ` ${session.selectedId}`} · players ${players} (${phones} phones, ${bots} bots), TVs ${tvs.size} · ` +
+    `tick work avg ${(stats.workSum / Math.max(1, stats.ticks)).toFixed(2)} ms, max ${stats.workMax.toFixed(1)} ms, longest gap ${Math.round(stats.gapMax)} ms · ` +
+    // The histogram samples every 10 ms and includes that interval, so subtract it to get the actual stall.
+    `event loop stall p99 ${Math.max(0, loopDelay.percentile(99) / 1e6 - 10).toFixed(1)} ms · ` +
+    `in ${Math.round(stats.msgsIn / secs)}/s, out ${Math.round(stats.msgsOut / secs)}/s (${(stats.bytesOut / secs / 1024).toFixed(1)} KB/s) · ` +
+    `skipped TV frames ${stats.tvSkipped}, phone views ${stats.viewsSkipped} · ` +
+    `memory ${Math.round(process.memoryUsage().rss / 1048576)} MB`
+  );
+}
+
+// Every 10 s at debug level; at info level once a minute, and only while a game is on.
+const STATS_EVERY_S = log.debugOn ? 10 : 60;
+setInterval(() => {
+  if (log.debugOn || session.phase === 'playing') log.info('stats', statsLine());
+  Object.assign(stats, { since: performance.now(), msgsIn: 0, msgsOut: 0, bytesOut: 0, ticks: 0, workSum: 0, workMax: 0, gapMax: 0, tvSkipped: 0, viewsSkipped: 0 });
+  loopDelay.reset();
+}, STATS_EVERY_S * 1000).unref();
 
 // Housekeeping: drop long-gone players, kill dead sockets.
 setInterval(() => {
   // Mid-game, keep everyone's seat (long turn-based games), so prune only outside games.
-  if (session.phase !== 'playing' && lobby.prune().length) session.changed();
+  if (session.phase !== 'playing') {
+    const gone = lobby.prune();
+    if (gone.length) {
+      log.info('lobby', `Removed after a minute away: #${gone.join(', #')}`);
+      session.changed();
+    }
+  }
   for (const ws of wss.clients) {
     if (!ws.isAlive) {
+      log.info('ws', `No answer to ping from ${ws.role ?? 'unknown'}${ws.playerId ? ` #${ws.playerId}` : ''}; closing`);
       ws.terminate();
       continue;
     }
@@ -314,5 +488,30 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  Couchcade server running');
   console.log(`  TV screen:   http://localhost:${PORT}/tv`);
   console.log(`  Phones join: ${JOIN_URL}`);
+  console.log(`  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more) · http://localhost:${PORT}/api/logs`);
   console.log('');
+  log.info('server', `started on ${JOIN_URL} at ${TICK_HZ} ticks/s, node ${process.version}`);
 });
+
+server.on('error', (err) => {
+  log.error('server', `can't listen on port ${PORT}: ${err.message}`);
+  log.flushSync();
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  log.error('server', 'uncaught exception; stopping', err);
+  log.flushSync();
+  process.exit(1);
+});
+process.on('unhandledRejection', (err) => {
+  const n = log.every('unhandled-rejection', 10_000);
+  if (n) log.error('server', 'unhandled promise rejection', err instanceof Error ? err : String(err));
+});
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    log.info('server', `stopping (${sig})`);
+    log.flushSync();
+    process.exit(0);
+  });
+}

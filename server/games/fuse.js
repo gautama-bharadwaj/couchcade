@@ -45,6 +45,7 @@ const DECOYS = 3;
 const DEAL = 5;
 
 const TURN_SECONDS = 30;
+const AWAY_TURN_SECONDS = 5; // turn length for a player whose phone is disconnected
 const CHOICE_SECONDS = 15; // Bucket or wires, where to hide the Bomb, which wire, Nudge, target
 const END_SECONDS = 7;
 const WIRES = [
@@ -537,6 +538,8 @@ export default {
           if (st.left <= 0) st.over = true;
           return;
         }
+        // Whoever's turn it is has dropped off the Wi-Fi: don't make the table wait the full timer.
+        if (!players.get(current())?.connected) st.left = Math.min(st.left, AWAY_TURN_SECONDS);
         if (st.left <= 0) autoMove();
       },
 

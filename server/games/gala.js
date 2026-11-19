@@ -462,7 +462,8 @@ export default {
           st.left = Math.max(0, st.left - 1);
         }
         if (st.over) return;
-        const need = needed();
+        // Players whose phones dropped off don't hold the phase open; the timer still covers them.
+        const need = needed().filter((id) => players.get(id)?.connected);
         const allDone = need.length > 0 && need.every(isDone);
         if (st.left <= 0 || allDone) advance();
       },

@@ -22,6 +22,7 @@ const COLORS = [
 const colorById = new Map(COLORS.map((c) => [c.id, c]));
 
 const TURN_SECONDS = 30;
+const AWAY_TURN_SECONDS = 5; // turn length for a player whose phone is disconnected
 const HAND_SIZE = 7;
 const CATCH_PENALTY = 2;
 const CATCH_GRACE_S = 3; // time to say "Last card!" before anyone can catch you
@@ -303,6 +304,8 @@ export default {
           if (st.endLeft <= 0) st.over = true;
           return;
         }
+        // Whoever's turn it is has dropped off the Wi-Fi: don't make the table wait the full 30 s.
+        if (!players.get(current())?.connected) st.left = Math.min(st.left, AWAY_TURN_SECONDS);
         if (st.left <= 0) autoMove();
       },
 

@@ -50,7 +50,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 ## Architecture
 
 ```
-phones ──input on every press (+30/s)──▶  server  ──state 60/s──▶  TV page (canvas, 60 fps)
+phones ──input on every press (+30/s)──▶  server  ──state up to 60/s──▶  TV page (canvas, 60 fps)
                          │
                          ├─ lobby.js     players, colours, host, reconnect tokens
                          ├─ session.js   lobby → playing → results → lobby
@@ -66,6 +66,7 @@ Press **L** on the TV during an action game to see, per phone: the round trip to
 ```
 server/
   index.js            HTTP (pages + QR) and WebSocket hub, 60 Hz loop
+  log.js              buffered, leveled logging (see Logging)
   lobby.js            who's here
   session.js          shared game flow (pick, start, results)
   arena.js            1600x900 logical canvas shared by all games
@@ -93,17 +94,37 @@ The lobby, joining, reconnects, host controls, phone layout and results screen a
 
 | Direction | Message |
 | --- | --- |
-| phone → server | `hello {role:'player', name, token?}`, `input {x, y, a, b}` (30/s), `act {key, value?}` (screens games) |
+| phone → server | `hello {role:'player', name, token?}`, `input {x, y, a, b}` (on every press, plus 30/s), `act {key, value?}` (screens games) |
+| phone / TV → server | `clientError {message}` (script errors, a few per minute at most, for the server log) |
 | host phone / TV → server | `select {gameId}`, `start`, `end` |
 | TV → server | `hello {role:'tv'}` |
 | server → everyone | `phase {phase, gameId, games, controller, hostId, players, results}` |
-| server → TV | `state {gameId, tick, data}` (30/s) |
-| server → phone | `welcome {id, token, name, color}`, `you {data}` (10/s), `error`, `full` |
+| server → TV | `state {gameId, tick, pads, data}` (up to 60/s; a snapshot identical to the last one is skipped, with a repeat every second) |
+| server → phone | `welcome {id, token, name, color}`, `you {data}` (up to 10/s, only when it changed, and right after any tap), `error`, `full` |
+
+### Smooth with 8 players
+
+Measured with 8 simulated phones (`server/` CPU stays under 6% of one core in every game; a tick takes well under a millisecond):
+
+- Phones only get a view when it changed. In the card games this cut phone traffic from up to 40 messages a second per phone to between 4 and 12, which leaves the Wi-Fi free for everyone's button presses. Taps that land together share one refresh.
+- The TV skips snapshots identical to the last one (card games barely change between ticks), and a TV or phone that falls behind skips stale updates instead of queueing them, so it shows the present as soon as it catches up.
+- The TV canvas is drawn at most 2560x1440 and stretched to the screen. On a 4K TV that is under half the pixels per frame. `/tv?res=2` raises the limit, `/tv?res=1` lowers it for slow machines like the Pi.
+- In Shed! and Fuse, a player whose phone dropped off gets a 5-second turn instead of 30. In Midnight Gala they no longer hold a phase open until its timer runs out.
+- A bug in a game ends that game with a note on the results screen, instead of crashing the server for everyone. A TV drawing error skips the frame instead of freezing the screen.
+
+## Logging
+
+The server logs joins, leaves, reconnects, game starts and finishes, errors (with stack traces), script errors from the TV and phones, and once a minute during a game a health line: tick time, the longest gap between ticks, event loop stalls, messages and KB per second, skipped frames and memory.
+
+- **Where:** the terminal and `logs/couchcade.log` (rotates at 5 MB, keeps one old copy). The last 300 lines and live numbers are also at `http://localhost:3000/api/logs`, viewable from any device on the Wi-Fi.
+- **More detail:** `LOG_LEVEL=debug npm run dev` adds every tap in card games, host commands, and the health line every 10 seconds. Levels are `error`, `warn`, `info` (default), `debug`, `trace`. `LOG_FILE=off` skips the file.
+- **Why it doesn't cause lag:** nothing is logged per frame or per joystick message. Lines are buffered and written together four times a second through an async file stream, so a tick never waits on the disk. Repeating problems (a slow tick, a page throwing every frame) log at most once every few seconds with a count of how many were held back. A disabled level costs one comparison.
 
 ## Troubleshooting
 
 - **Phone can't load the page.** Make sure the phone is on the same Wi-Fi as the Mac (not a guest network) and check the macOS firewall setting for `node`.
 - **Wrong IP in the QR code.** Run `HOST_IP=192.168.1.50 npm run dev` with the Mac's actual Wi-Fi address.
+- **Something went wrong during a game.** Look at `logs/couchcade.log` (or `/api/logs`) for `WARN` and `ERROR` lines around that time. For lag, the `[stats]` lines show whether the server kept up (tick work, longest gap); press **L** on the TV to see whether it's the Wi-Fi.
 
 ## Milestones
 
