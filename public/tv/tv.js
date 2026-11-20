@@ -1,7 +1,7 @@
 // TV core: connection, lobby/results screens, and the render loop.
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
-// Keys (Mac keyboard / later a keyboard on the Pi):
+// Keys (any keyboard on the computer driving the TV):
 //   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game · I switch join address
 
 import { renderers } from './games/index.js';
@@ -91,7 +91,7 @@ connect();
 setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ t: 'ping', at: performance.now() })), 2000);
 
 // Script errors go to the server log (a few per minute at most), so a TV problem shows up in
-// logs/couchcade.log instead of only in a console nobody has open.
+// the server's log file instead of only in a console nobody has open.
 let errorsSent = 0;
 setInterval(() => (errorsSent = 0), 60_000);
 function reportError(message) {
@@ -166,7 +166,7 @@ function renderResults(results) {
 }
 
 // --- Rendering -------------------------------------------------------------------
-// The canvas is drawn at most 1.6x the 1600x900 arena (2560x1440 pixels). A 4K TV on a Mac
+// The canvas is drawn at most 1.6x the 1600x900 arena (2560x1440 pixels). A 4K TV on a laptop
 // would otherwise get a 3840x2160 canvas: 2.25x the pixels to fill every frame, for detail
 // nobody sees from the couch, and enough to drop frames on a Raspberry Pi. The browser
 // stretches it to fill the screen. /tv?res=2 raises the cap, /tv?res=1 lowers it for slow machines.
