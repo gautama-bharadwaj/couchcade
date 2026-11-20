@@ -8,7 +8,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { log } from './log.js';
 import { joinAddresses } from './address.js';
-import { PACKAGED, openBrowser } from './runtime.js';
+import { PACKAGED, SEA, openBrowser } from './runtime.js';
 import { Lobby, MAX_PLAYERS } from './lobby.js';
 import { Session } from './session.js';
 import { ARENA } from './arena.js';
@@ -89,22 +89,42 @@ const server = http.createServer(async (req, res) => {
     }
 
     const rel = ROUTES[url.pathname] ?? url.pathname;
-    const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
-    if (!filePath.startsWith(PUBLIC_DIR + path.sep)) return notFound(res);
-
-    const info = await stat(filePath).catch(() => null);
-    if (!info?.isFile()) return notFound(res);
+    const body = SEA ? embeddedFile(rel) : await diskFile(rel);
+    if (!body) return notFound(res);
 
     res.writeHead(200, {
-      'Content-Type': MIME[path.extname(filePath)] ?? 'application/octet-stream',
+      'Content-Type': MIME[path.extname(rel)] ?? 'application/octet-stream',
       'Cache-Control': 'no-store', // dev-friendly: always serve the latest file
     });
-    res.end(await readFile(filePath));
+    res.end(body);
   } catch (err) {
     log.error('http', `${req.method} ${req.url} failed`, err);
     res.writeHead(500).end('Server error');
   }
 });
+
+/** A file under public/, or null. Never anything outside it, whatever the URL says. */
+async function diskFile(rel) {
+  const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
+  if (!filePath.startsWith(PUBLIC_DIR + path.sep)) return null;
+  const info = await stat(filePath).catch(() => null);
+  return info?.isFile() ? readFile(filePath) : null;
+}
+
+/**
+ * The same file from inside the packaged app, where public/ is embedded as assets keyed by
+ * their path under public/ ("tv/tv.js"; see scripts/build-release.mjs). Only embedded files
+ * exist there, but normalize anyway so "/a/../b" finds "b" like it would on disk.
+ */
+function embeddedFile(rel) {
+  const key = path.posix.normalize(rel).replace(/^\/+/, '');
+  if (!key || key.startsWith('../')) return null;
+  try {
+    return Buffer.from(SEA.getRawAsset(key)); // a view, not a copy; never written to
+  } catch {
+    return null; // getRawAsset throws for a key that isn't there
+  }
+}
 
 function sendJson(res, obj, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

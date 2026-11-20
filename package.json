@@ -27,7 +27,8 @@
   ],
   "scripts": {
     "start": "node bin/couchcade.js",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "build:release": "node scripts/build-release.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -35,5 +36,8 @@
   "dependencies": {
     "qrcode": "^1.5.4",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }
