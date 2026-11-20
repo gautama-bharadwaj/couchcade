@@ -1,8 +1,8 @@
 // TV core: connection, lobby/results screens, and the render loop.
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
-// Keys (Mac keyboard / later a keyboard on the Pi):
-//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game
+// Keys (any keyboard on the computer driving the TV):
+//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game · I switch join address
 
 import { renderers } from './games/index.js';
 import audio from './audio.js';
@@ -15,6 +15,8 @@ const statusEl = $('status');
 let arena = { w: 1600, h: 900 };
 let phase = null; // latest {t:'phase', ...} message
 let joinUrl = '';
+let joinCandidates = []; // this machine's other addresses, for "Wrong address? Switch"
+let joinIndex = 0;
 
 // Snapshot buffer for interpolation: render ~1.5 ticks in the past and blend the two
 // snapshots around that moment, so updates look smooth at any frame rate. This delay is part
@@ -30,19 +32,40 @@ fetch('/api/join-info')
   .then((info) => {
     arena = info.arena;
     if (info.tickHz) renderDelayMs = 1.5 * (1000 / info.tickHz);
-    joinUrl = info.url.replace(/\/$/, '');
-    $('qr').innerHTML = info.qrSvg;
-    $('qrSmall').innerHTML = info.qrSvg;
-    $('url').textContent = joinUrl;
+    showJoin(info);
+    joinCandidates = info.candidates ?? [];
+    joinIndex = Math.max(0, joinCandidates.findIndex((c) => c.address === info.address));
+    $('switchIp').hidden = joinCandidates.length < 2;
     resize();
   });
+
+function showJoin(info) {
+  joinUrl = info.url.replace(/\/$/, '');
+  $('qr').innerHTML = info.qrSvg;
+  $('qrSmall').innerHTML = info.qrSvg;
+  $('url').textContent = joinUrl;
+}
+
+// A machine with VPNs, VMs or two networks can guess the wrong address for the QR code.
+// Cycle through the others; the server draws the code (and only for its own addresses).
+async function switchJoinAddress() {
+  if (joinCandidates.length < 2) return showToast('No other network addresses found (HOST_IP sets one)');
+  const i = (joinIndex + 1) % joinCandidates.length;
+  const c = joinCandidates[i];
+  const info = await fetch(`/api/join-info?ip=${encodeURIComponent(c.address)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!info) return showToast('Could not switch address; reload the page');
+  joinIndex = i;
+  showJoin(info);
+  showToast(`Join address ${i + 1}/${joinCandidates.length}: ${c.address} (${c.name})`);
+}
+$('switchIp').addEventListener('click', switchJoinAddress);
 
 // --- WebSocket -----------------------------------------------------------------
 let ws;
 let pingMs = null;
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', role: 'tv' }));
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
@@ -68,7 +91,7 @@ connect();
 setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ t: 'ping', at: performance.now() })), 2000);
 
 // Script errors go to the server log (a few per minute at most), so a TV problem shows up in
-// logs/couchcade.log instead of only in a console nobody has open.
+// the server's log file instead of only in a console nobody has open.
 let errorsSent = 0;
 setInterval(() => (errorsSent = 0), 60_000);
 function reportError(message) {
@@ -143,7 +166,7 @@ function renderResults(results) {
 }
 
 // --- Rendering -------------------------------------------------------------------
-// The canvas is drawn at most 1.6x the 1600x900 arena (2560x1440 pixels). A 4K TV on a Mac
+// The canvas is drawn at most 1.6x the 1600x900 arena (2560x1440 pixels). A 4K TV on a laptop
 // would otherwise get a 3840x2160 canvas: 2.25x the pixels to fill every frame, for detail
 // nobody sees from the couch, and enough to drop frames on a Raspberry Pi. The browser
 // stretches it to fill the screen. /tv?res=2 raises the cap, /tv?res=1 lowers it for slow machines.
@@ -306,6 +329,7 @@ window.addEventListener('keydown', (e) => {
   if (key === 'n') showToast(audio.toggleNarrator() ? 'Narrator on' : 'Narrator off');
   if (key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   if (key === 'j' && phase?.phase === 'playing') $('joinSmall').classList.toggle('show');
+  if (key === 'i' && !e.repeat) switchJoinAddress();
   if (!phase) return;
   if (phase.phase === 'lobby' && (key === 'arrowdown' || key === 'arrowup')) {
     const i = phase.games.findIndex((g) => g.id === phase.gameId);

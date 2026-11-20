@@ -1,17 +1,26 @@
 import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { log } from './log.js';
+import { joinAddresses } from './address.js';
+import { PACKAGED, SEA, openBrowser } from './runtime.js';
 import { Lobby, MAX_PLAYERS } from './lobby.js';
 import { Session } from './session.js';
 import { ARENA } from './arena.js';
 
+// PORT set: use exactly that port (and stop if it's busy). Not set: 3000, or if another app
+// already has it, the first free one of 3001-3010, so a double-click never just fails.
+const PORT_SET = Boolean(process.env.PORT);
 const PORT = Number(process.env.PORT) || 3000;
+const PORT_TRIES = PORT_SET ? 1 : 11;
+// The downloads open the TV page themselves (nobody reads a terminal after a double-click).
+// From source only with --open / OPEN_BROWSER=1, so npm run dev doesn't pop a tab per restart.
+const OPEN_BROWSER = process.env.OPEN_BROWSER === '1' || (PACKAGED && process.env.OPEN_BROWSER !== '0');
 // 60 ticks a second: an input waits at most ~17 ms for the next tick (it was ~33 ms at 30).
 // TICK_HZ=30 npm start halves the CPU work if a small machine struggles.
 const TICK_HZ = Number(process.env.TICK_HZ) || 60;
@@ -22,33 +31,14 @@ const TV_BACKLOG_BYTES = 64 * 1024;
 const PHONE_BACKLOG_BYTES = 16 * 1024;
 // Turn-based games often don't change for many ticks; the TV then gets a repeat at least this often.
 const TV_KEEPALIVE_MS = 1000;
+// On a shared network (office, dorm) you may not want the log readable by everyone on it.
+const LOG_API_OFF = process.env.DISABLE_LOG_API === '1';
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-// ---------------------------------------------------------------------------
-// LAN address: what phones will type / scan. Prefer Wi-Fi (en0 on a Mac, wlan0 on a Pi).
-// Override with HOST_IP=192.168.x.y npm start if it picks the wrong one.
-// ---------------------------------------------------------------------------
-function lanAddress() {
-  if (process.env.HOST_IP) return process.env.HOST_IP;
-  const ifaces = os.networkInterfaces();
-  const preferred = ['en0', 'wlan0', 'en1', 'eth0'];
-  const candidates = [];
-  for (const [name, addrs] of Object.entries(ifaces)) {
-    for (const a of addrs ?? []) {
-      if (a.family === 'IPv4' && !a.internal) candidates.push({ name, address: a.address });
-    }
-  }
-  candidates.sort((a, b) => rank(a.name) - rank(b.name));
-  return candidates[0]?.address ?? 'localhost';
-
-  function rank(name) {
-    const i = preferred.indexOf(name);
-    return i === -1 ? preferred.length : i;
-  }
-}
-
-const HOST_IP = lanAddress();
-const JOIN_URL = `http://${HOST_IP}:${PORT}/`;
+// Phones join at http://<LAN address>:<port>/. The address is worked out per request (see
+// address.js), so reloading the TV after the machine changes networks shows the right code.
+let port = PORT; // the port actually bound, once listening
+const joinUrlFor = (address) => `http://${address}:${port}/`;
 
 // ---------------------------------------------------------------------------
 // HTTP: static files + a tiny join-info API
@@ -73,35 +63,71 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
 
     if (url.pathname === '/api/join-info') {
-      const qrSvg = await QRCode.toString(JOIN_URL, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
-      return sendJson(res, { url: JOIN_URL, qrSvg, maxPlayers: MAX_PLAYERS, arena: ARENA, tickHz: TICK_HZ });
+      // ?ip= picks another of this machine's addresses (the TV's "Switch" control). Only real
+      // candidates are accepted, so the TV can never be made to show a code for some other host.
+      const { primary, candidates } = await joinAddresses();
+      const ip = url.searchParams.get('ip');
+      if (ip && !candidates.some((c) => c.address === ip)) return sendJson(res, { error: 'Not an address of this machine' }, 400);
+      const address = ip || primary;
+      const joinUrl = joinUrlFor(address);
+      const qrSvg = await QRCode.toString(joinUrl, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
+      return sendJson(res, {
+        url: joinUrl,
+        address,
+        qrSvg,
+        candidates: candidates.map((c) => ({ ...c, url: joinUrlFor(c.address) })),
+        maxPlayers: MAX_PLAYERS,
+        arena: ARENA,
+        tickHz: TICK_HZ,
+      });
     }
-    if (url.pathname === '/api/logs') {
+    if (url.pathname === '/api/logs' && !LOG_API_OFF) {
       // Recent log lines plus live numbers, for debugging from any browser on the Wi-Fi.
+      // Anyone on the network can read it (player names, addresses), hence DISABLE_LOG_API=1.
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(`${statsLine()}\n\nLog level: ${log.level} · file: ${log.file ?? 'off'}\n\n${log.recent()}`);
     }
 
     const rel = ROUTES[url.pathname] ?? url.pathname;
-    const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
-    if (!filePath.startsWith(PUBLIC_DIR + path.sep)) return notFound(res);
-
-    const info = await stat(filePath).catch(() => null);
-    if (!info?.isFile()) return notFound(res);
+    const body = SEA ? embeddedFile(rel) : await diskFile(rel);
+    if (!body) return notFound(res);
 
     res.writeHead(200, {
-      'Content-Type': MIME[path.extname(filePath)] ?? 'application/octet-stream',
+      'Content-Type': MIME[path.extname(rel)] ?? 'application/octet-stream',
       'Cache-Control': 'no-store', // dev-friendly: always serve the latest file
     });
-    res.end(await readFile(filePath));
+    res.end(body);
   } catch (err) {
     log.error('http', `${req.method} ${req.url} failed`, err);
     res.writeHead(500).end('Server error');
   }
 });
 
-function sendJson(res, obj) {
-  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+/** A file under public/, or null. Never anything outside it, whatever the URL says. */
+async function diskFile(rel) {
+  const filePath = path.normalize(path.join(PUBLIC_DIR, rel));
+  if (!filePath.startsWith(PUBLIC_DIR + path.sep)) return null;
+  const info = await stat(filePath).catch(() => null);
+  return info?.isFile() ? readFile(filePath) : null;
+}
+
+/**
+ * The same file from inside the packaged app, where public/ is embedded as assets keyed by
+ * their path under public/ ("tv/tv.js"; see scripts/build-release.mjs). Only embedded files
+ * exist there, but normalize anyway so "/a/../b" finds "b" like it would on disk.
+ */
+function embeddedFile(rel) {
+  const key = path.posix.normalize(rel).replace(/^\/+/, '');
+  if (!key || key.startsWith('../')) return null;
+  try {
+    return Buffer.from(SEA.getRawAsset(key)); // a view, not a copy; never written to
+  } catch {
+    return null; // getRawAsset throws for a key that isn't there
+  }
+}
+
+function sendJson(res, obj, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
 
@@ -130,6 +156,9 @@ function notFound(res) {
 // Small, frequent messages: no compression (it costs CPU and adds delay). ws already turns off
 // Nagle's algorithm (TCP_NODELAY) on every socket, so a press is never held back to batch it.
 const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: false, maxPayload: 16 * 1024 });
+// ws re-emits the http server's errors (like EADDRINUSE while trying ports). Without a listener
+// that would throw; start() and the server's own handler below already report them.
+wss.on('error', () => {});
 const lobby = new Lobby();
 const session = new Session(lobby, (msg) => {
   // A phase change can swap the phone's screen; make sure every phone gets a fresh view after it.
@@ -483,21 +512,87 @@ setInterval(() => {
   }
 }, 5000);
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('');
-  console.log('  Couchcade server running');
-  console.log(`  TV screen:   http://localhost:${PORT}/tv`);
-  console.log(`  Phones join: ${JOIN_URL}`);
-  console.log(`  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more) · http://localhost:${PORT}/api/logs`);
-  console.log('');
-  log.info('server', `started on ${JOIN_URL} at ${TICK_HZ} ticks/s, node ${process.version}`);
+function listenOn(p) {
+  return new Promise((resolve, reject) => {
+    const onError = (err) => {
+      server.off('listening', onListening);
+      reject(err);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(p, '0.0.0.0');
+  });
+}
+
+async function start() {
+  const { primary } = await joinAddresses();
+  for (let i = 0; i < PORT_TRIES; i++) {
+    try {
+      await listenOn(PORT + i);
+      port = PORT + i;
+      break;
+    } catch (err) {
+      if (err.code === 'EADDRINUSE' && i < PORT_TRIES - 1) continue;
+      const why =
+        err.code !== 'EADDRINUSE' ? `can't listen on port ${PORT + i}: ${err.message}`
+        : PORT_SET ? `port ${PORT} is already in use (is Couchcade already running?). Close that or pick another port, e.g. --port 3100.`
+        : `ports ${PORT}-${PORT + PORT_TRIES - 1} are all in use (is Couchcade already running?). Close that or pick a port, e.g. --port 3100.`;
+      log.error('server', why);
+      return exitAfterStartupError();
+    }
+  }
+  server.on('error', (err) => {
+    log.error('server', `server error: ${err.message}`, err);
+  });
+
+  const joinUrl = joinUrlFor(primary);
+  const tvUrl = `http://localhost:${port}/tv`;
+  const lines = [
+    '',
+    '  Couchcade is running',
+    '',
+    `  TV screen:   ${tvUrl}${OPEN_BROWSER ? '   (opening it in your browser)' : ''}`,
+    '               Open it on the computer connected to the TV, then press F for full screen.',
+    `  Phones join: ${joinUrl}   (scan the QR code on the TV)`,
+  ];
+  if (port !== PORT) lines.push(`  Note:        port ${PORT} was busy, so this uses ${port}.`);
+  // In a Docker bridge network the only address is the container's own (skipped, or 172.16-31.x),
+  // which phones can't reach. With --network host it finds the real one and needs no warning.
+  const dockerBridge = existsSync('/.dockerenv') && !process.env.HOST_IP && (primary === 'localhost' || /^172\.(1[6-9]|2\d|3[01])\./.test(primary));
+  if (dockerBridge) {
+    lines.push("  Warning:     in Docker the container's own address isn't reachable from phones.");
+    lines.push("               Set HOST_IP to this computer's LAN address, or use --network host (Linux).");
+  } else if (primary === 'localhost') {
+    lines.push("  Warning:     no network address found, so phones can't join. Connect to Wi-Fi or set HOST_IP.");
+  }
+  lines.push(
+    `  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more)${LOG_API_OFF ? '' : ` · http://localhost:${port}/api/logs`}`,
+    '  Quit:        press Ctrl+C, or close this window.',
+    '',
+  );
+  console.log(lines.join('\n'));
+  log.info('server', `started on ${joinUrl} at ${TICK_HZ} ticks/s, node ${process.version}${PACKAGED ? ' (packaged)' : ''}`);
+  if (OPEN_BROWSER) openBrowser(tvUrl);
+}
+start().catch((err) => {
+  log.error('server', 'startup failed', err);
+  exitAfterStartupError();
 });
 
-server.on('error', (err) => {
-  log.error('server', `can't listen on port ${PORT}: ${err.message}`);
+function exitAfterStartupError() {
   log.flushSync();
+  // A double-clicked .exe closes its console window on exit, taking the reason with it.
+  if (PACKAGED && process.stdin.isTTY) {
+    console.log('\n  Press Enter to close this window.');
+    process.stdin.once('data', () => process.exit(1));
+    return;
+  }
   process.exit(1);
-});
+}
 
 process.on('uncaughtException', (err) => {
   log.error('server', 'uncaught exception; stopping', err);

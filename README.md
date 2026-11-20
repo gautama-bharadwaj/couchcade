@@ -1,20 +1,71 @@
 # Couchcade
 
-Party games on the big screen, with your phone as the controller. The TV shows the game in a full-screen browser on a computer plugged in over HDMI (the MacBook now, a Raspberry Pi later). Phones join over home Wi-Fi by scanning a QR code; nobody installs anything.
+Party games on the big screen, with your phone as the controller. Any computer connected to the TV (or any big screen with a browser) shows the game; phones on the same Wi-Fi join by scanning a QR code. Nobody installs anything on their phone, and nothing goes over the internet.
+
+Couchcade runs on macOS, Windows and Linux. Pick whichever way of starting it suits you; all of them run a small server on that computer and show you where to point the TV and the phones.
 
 ## Run it
 
-You need Node.js 20 or newer (`node -v`; install with `brew install node` if it's missing).
+### Download (easiest)
+
+Get the file for your computer from the [Releases page](https://github.com/gautama-bharadwaj/couchcade/releases/latest):
+
+| Computer | File | Then |
+| --- | --- | --- |
+| Mac with Apple silicon (M1 or newer) | `Couchcade-macos-arm64.zip` | Unzip and open **Couchcade.app**. |
+| Windows | `Couchcade-windows-x64.exe` | Double-click it. A console window shows the addresses; close it to stop. |
+| Linux (x64, or arm64 such as a 64-bit Raspberry Pi) | `couchcade-linux-x64` / `couchcade-linux-arm64` | `chmod +x couchcade-linux-*` and run it. |
+
+The app opens the TV page in your default browser by itself. The downloads aren't signed yet, so the first launch needs one extra click; see [Unsigned downloads](#unsigned-downloads). The Mac app has no window of its own: to stop it, use **Force Quit** (⌥⌘Esc) or Activity Monitor. On an Intel Mac, use `npx` or run it from source.
+
+### With Node.js: `npx couchcade`
+
+Once Couchcade is published to npm, any computer with [Node.js](https://nodejs.org) 20 or newer can run:
 
 ```bash
-cd ~/Documents/couchcade
-npm install
-npm run dev        # restarts automatically when you edit server files
+npx couchcade          # add --open to open the TV page in your browser
 ```
 
-- **TV:** open `http://localhost:3000/tv` on the Mac, then press **F** for full screen.
-- **Phones:** scan the QR code on the TV, which opens `http://<mac-ip>:3000/`.
-- The first time it runs, allow incoming connections for `node` if macOS asks.
+### From source
+
+```bash
+git clone https://github.com/gautama-bharadwaj/couchcade.git
+cd couchcade
+npm install
+npm run dev            # restarts automatically when you edit server files
+```
+
+`npm start` runs it without the auto-restart and takes the options below (`npm start -- --open`).
+
+### Docker
+
+```bash
+docker build -t couchcade .
+docker run --rm -p 3000:3000 -e HOST_IP=192.168.1.50 couchcade   # HOST_IP = this computer's LAN address
+docker run --rm --network host couchcade                         # Linux only: finds the address itself
+```
+
+Phones can't reach a container's own address, so with `-p` the QR code needs `HOST_IP`. With `--network host` (Linux) the container uses the host's network and finds the right address itself.
+
+### Then
+
+- **TV:** open `http://localhost:3000/tv` on the computer connected to the TV, then press **F** for full screen. The startup message shows the exact address: if port 3000 is already taken by another app, Couchcade uses the next free one (3001 to 3010).
+- **Phones:** scan the QR code on the TV. If phones can't open it, the computer may have picked the wrong network address (common with VPNs, Docker or virtual machines): click **Wrong address? Switch** under the code or press **I** on the TV to cycle through this computer's other addresses. See also [Troubleshooting](#troubleshooting).
+- The first time it runs, your firewall may ask whether to allow incoming connections. Allow them on **private** networks, or phones can't connect.
+
+### Options
+
+| Flag | Environment variable | What it does |
+| --- | --- | --- |
+| `--port 3100` | `PORT=3100` | Use exactly this port (and stop if it's busy). Without it: 3000, or the next free one up to 3010. |
+| `--host-ip 192.168.1.50` | `HOST_IP=192.168.1.50` | The address to put in the QR code, if the one it finds is wrong. |
+| `--open` / `--no-open` | `OPEN_BROWSER=1` / `0` | Open the TV page in the default browser once running. The downloads do this by default; `npm run dev` and `npx` don't. |
+| | `LOG_LEVEL=debug` | More detail in the log; see [Logging](#logging). |
+| | `LOG_FILE=off` or a path | Don't write a log file, or write it there. |
+| | `DISABLE_LOG_API=1` | Turn off `/api/logs` (handy on a network shared with strangers). |
+| | `TICK_HZ=30` | Halve the server's work on a very slow machine. |
+
+Flags work with the downloads, `npx couchcade` and `npm start --`; `couchcade --help` lists them. Environment variables work everywhere, including `npm run dev` (`PORT=3100 npm run dev`).
 
 ### Playing
 
@@ -22,11 +73,11 @@ npm run dev        # restarts automatically when you edit server files
 2. The host picks a game on their phone and taps **Start**.
 3. When the game ends, everyone sees the results, then it goes back to the lobby.
 
-TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay.
+TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one).
 
 ### Sound
 
-The TV plays synthesized sound effects and a narrator using the browser's built-in voice; there are no audio files. Browsers only allow sound after you interact, so press any key or click on the TV page once. **M** mutes, **N** turns the narrator on or off (remembered per browser). The narrator sounds best in Chrome or Safari on the Mac; Chromium on a Raspberry Pi may have only a robotic voice or none.
+The TV plays synthesized sound effects and a narrator using the browser's built-in voice; there are no audio files. Browsers only allow sound after you interact, so press any key or click on the TV page once. **M** mutes, **N** turns the narrator on or off (remembered per browser). The narrator sounds best in Chrome, Edge or Safari on macOS and Windows; Chromium on Linux (a Raspberry Pi especially) may have only a robotic voice or none.
 
 ### Playing with bots
 
@@ -64,8 +115,11 @@ The server is the only place game logic runs. The TV just draws snapshots, and p
 Press **L** on the TV during an action game to see, per phone: the round trip to the server, the longest Wi-Fi stall in the last second, and an estimate of press-to-screen time. A square next to each name lights up when the server sees that phone hold a button. To measure the true end-to-end delay, film the phone and the TV together in slow motion and count frames between the phone's button lighting and the square. The code path adds about 35 ms (send on press, a 60 Hz tick, a 25 ms smoothing buffer on the TV); the rest is Wi-Fi and the TV's own picture processing, so switch the TV to **Game mode**. Phones send presses the instant they happen, and the server holds a quick tap for at least one tick so it is never missed.
 
 ```
+bin/couchcade.js      command-line entry (npx couchcade, the downloads): flags → environment variables
 server/
-  index.js            HTTP (pages + QR) and WebSocket hub, 60 Hz loop
+  index.js            HTTP (pages + QR) and WebSocket hub, 60 Hz loop, startup (port, banner)
+  address.js          which LAN address goes in the QR code, and the alternatives
+  runtime.js          packaged app or source? (node:sea), opening the browser
   log.js              buffered, leveled logging (see Logging)
   lobby.js            who's here
   session.js          shared game flow (pick, start, results)
@@ -78,6 +132,9 @@ public/
   tv/games/index.js   TV renderer registry
   tv/games/<id>.js    how each game is drawn
   controller/         phone UI: join, lobby, pad (buttons come from the game), results
+scripts/
+  smoke.mjs           npm run check: starts the server and tests it from outside
+  build-release.mjs   npm run build:release: the downloadable apps (see Releases)
 ```
 
 ### Adding a game
@@ -116,15 +173,42 @@ Measured with 8 simulated phones (`server/` CPU stays under 6% of one core in ev
 
 The server logs joins, leaves, reconnects, game starts and finishes, errors (with stack traces), script errors from the TV and phones, and once a minute during a game a health line: tick time, the longest gap between ticks, event loop stalls, messages and KB per second, skipped frames and memory.
 
-- **Where:** the terminal and `logs/couchcade.log` (rotates at 5 MB, keeps one old copy). The last 300 lines and live numbers are also at `http://localhost:3000/api/logs`, viewable from any device on the Wi-Fi.
-- **More detail:** `LOG_LEVEL=debug npm run dev` adds every tap in card games, host commands, and the health line every 10 seconds. Levels are `error`, `warn`, `info` (default), `debug`, `trace`. `LOG_FILE=off` skips the file.
+- **Where:** the terminal, and a log file that rotates at 5 MB (keeping one old copy). The startup message shows its path.
+  - From source: `logs/couchcade.log` in the project folder.
+  - The downloads and `npx`: macOS `~/Library/Logs/Couchcade/couchcade.log`, Windows `%LOCALAPPDATA%\Couchcade\logs\couchcade.log`, Linux `~/.local/state/couchcade/couchcade.log` (or under `$XDG_STATE_HOME`).
+  - Docker: the terminal only (`docker logs`).
+- **From another device:** the last 300 lines and live numbers are at `http://localhost:3000/api/logs`, viewable from any device on the Wi-Fi. `DISABLE_LOG_API=1` turns that off.
+- **More detail:** `LOG_LEVEL=debug npm run dev` adds every tap in card games, host commands, and the health line every 10 seconds. Levels are `error`, `warn`, `info` (default), `debug`, `trace`. `LOG_FILE=off` skips the file; `LOG_FILE=/some/path.log` puts it elsewhere.
 - **Why it doesn't cause lag:** nothing is logged per frame or per joystick message. Lines are buffered and written together four times a second through an async file stream, so a tick never waits on the disk. Repeating problems (a slow tick, a page throwing every frame) log at most once every few seconds with a count of how many were held back. A disabled level costs one comparison.
 
 ## Troubleshooting
 
-- **Phone can't load the page.** Make sure the phone is on the same Wi-Fi as the Mac (not a guest network) and check the macOS firewall setting for `node`.
-- **Wrong IP in the QR code.** Run `HOST_IP=192.168.1.50 npm run dev` with the Mac's actual Wi-Fi address.
-- **Something went wrong during a game.** Look at `logs/couchcade.log` (or `/api/logs`) for `WARN` and `ERROR` lines around that time. For lag, the `[stats]` lines show whether the server kept up (tick work, longest gap); press **L** on the TV to see whether it's the Wi-Fi.
+- **Phones can't open the page.**
+  - They must be on the same network as the computer. **Guest, office, school and hotel Wi-Fi** usually has "client isolation", which stops devices on it from reaching each other; Couchcade can't work around that. Use a home network, or turn on your phone's hotspot and connect the computer and the other phones to it.
+  - **Firewall.** Windows Defender Firewall asks the first time: allow Couchcade on **private** networks. If you clicked Cancel, go to Windows Security > Firewall & network protection > Allow an app through firewall, and tick **Private** for Couchcade (or Node.js). Windows also blocks it if your Wi-Fi is set to Public: Settings > Network & internet > Wi-Fi > your network > **Private network**. On macOS, check System Settings > Network > Firewall > Options and allow Couchcade (or `node`). On Linux with ufw: `sudo ufw allow 3000/tcp`.
+  - A **VPN** on the computer can grab the network; try with it off.
+- **Wrong address in the QR code.** Press **I** on the TV (or click **Wrong address? Switch**) to try this computer's other addresses. To fix it for good, start with `--host-ip 192.168.1.50` (or `HOST_IP=...`) using the address of the computer's Wi-Fi or Ethernet connection. Under WSL or in Docker the detected address is the virtual one: set `HOST_IP` to the Windows/host machine's address.
+- **"Port 3000 is already in use".** Without `--port`, Couchcade moves to 3001-3010 by itself. With `--port`/`PORT` it uses exactly that port, so pick another or close the other copy of Couchcade.
+- **Something went wrong during a game.** Look at the log file (its path is in the startup message; see [Logging](#logging)) or `/api/logs` for `WARN` and `ERROR` lines around that time. For lag, the `[stats]` lines show whether the server kept up (tick work, longest gap); press **L** on the TV to see whether it's the Wi-Fi.
+
+### Unsigned downloads
+
+The downloads aren't signed or notarized yet, so the OS warns about them the first time:
+
+- **macOS:** "Apple could not verify Couchcade..." Click **Done**, then open System Settings > **Privacy & Security**, scroll to Security, and click **Open Anyway** next to the message about Couchcade. Confirm, and it opens normally from then on.
+- **Windows:** SmartScreen says "Windows protected your PC". Click **More info**, then **Run anyway**.
+- **Linux:** browsers drop the executable bit on downloads, so run `chmod +x couchcade-linux-*` first.
+
+## Releases
+
+The downloads are built by `.github/workflows/release.yml`. Push a tag to build every platform, smoke test each binary and publish a GitHub Release with the files:
+
+```bash
+npm version minor        # bumps package.json and tags v0.2.0
+git push origin main --follow-tags
+```
+
+To build only for the machine you're on: `npm run build:release` (needs Node 25.5 or newer), which writes `dist/release/`. It bundles the server with esbuild and packs it, Node itself and `public/` into one [single executable application](https://nodejs.org/api/single-executable-applications.html). This is the only build step in the project; development never needs it. `npm run check` runs the smoke test against the source, and `node scripts/smoke.mjs --cmd <binary>` against a build.
 
 ## Milestones
 
@@ -138,7 +222,8 @@ The server logs joins, leaves, reconnects, game starts and finishes, errors (wit
 - [x] Fuse (push-your-luck bomb card game)
 - [x] Stickup (stick-figure brawler; tune weapons and arenas on real phones)
 - [ ] M4 Polish: sounds, keep phones awake, Draw & Guess
-- [ ] M5 Raspberry Pi
+- [x] M5 Portable: any OS with a browser; downloads for macOS, Windows and Linux, `npx`, Docker; smarter QR address
+- [ ] M6 Signed and notarized downloads, publish to npm
 
 ## License
 

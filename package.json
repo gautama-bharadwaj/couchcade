@@ -3,11 +3,33 @@
   "version": "0.1.0",
   "description": "Couchcade: living-room party games on the big screen, phones as controllers",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gautama-bharadwaj/couchcade.git"
+  },
+  "keywords": [
+    "party-game",
+    "game",
+    "tv",
+    "phone-controller",
+    "lan",
+    "multiplayer"
+  ],
   "type": "module",
   "main": "server/index.js",
+  "bin": {
+    "couchcade": "bin/couchcade.js"
+  },
+  "files": [
+    "bin/",
+    "server/",
+    "public/"
+  ],
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
+    "start": "node bin/couchcade.js",
+    "dev": "node --watch server/index.js",
+    "build:release": "node scripts/build-release.mjs",
+    "check": "node scripts/smoke.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -15,5 +37,8 @@
   "dependencies": {
     "qrcode": "^1.5.4",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

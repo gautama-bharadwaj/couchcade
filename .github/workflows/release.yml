@@ -1,0 +1,101 @@
+# Builds the downloadable apps and attaches them to a GitHub Release.
+#
+#   git tag v0.2.0 && git push origin v0.2.0    build all platforms and publish the release
+#   Actions > Release > Run workflow            build only; download the files from the run
+#
+# Each platform builds on its own runner (a single executable embeds that platform's Node),
+# then runs the same smoke test as `npm run check` against the finished binary.
+# Builds are unsigned for now: see the TODOs below and "Unsigned downloads" in the README.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # --build-sea needs Node 25.5+. Pinned so every platform embeds exactly the same Node.
+  NODE_VERSION: '26.13.1'
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS arm64, os: macos-latest } # Apple silicon. Node's SEA doesn't support Intel Macs.
+          - { name: Windows x64, os: windows-latest }
+          - { name: Linux x64, os: ubuntu-latest }
+          - { name: Linux arm64, os: ubuntu-24.04-arm } # also 64-bit Raspberry Pi OS
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build:release
+
+      # TODO(apple-notarization): once there's an Apple Developer ID, add repository secrets
+      # (APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD),
+      # import the certificate into a temporary keychain here, re-sign dist/Couchcade.app with
+      # `codesign --options runtime --timestamp` (see scripts/build-release.mjs), re-zip it, then
+      # `xcrun notarytool submit dist/release/*.zip --wait` and `xcrun stapler staple`.
+      #
+      # TODO(windows-signing): once there's a code-signing certificate (or Azure Trusted Signing),
+      # add WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD secrets and run
+      # `signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f cert.pfx dist/release/*.exe` here.
+
+      - name: Smoke test the build
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            codesign --verify --deep --strict --verbose=2 dist/Couchcade.app
+            node scripts/smoke.mjs --cmd dist/Couchcade.app/Contents/MacOS/couchcade
+          else
+            node scripts/smoke.mjs --cmd "$(ls dist/release/*)"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: couchcade-${{ runner.os }}-${{ runner.arch }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+      - name: Checksums
+        run: cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Create the release and attach the files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes="Download the file for your computer, run it, and open the TV page it shows (the apps open it for you).
+          Phones scan the QR code on the TV; they need to be on the same Wi-Fi.
+
+          - **macOS (Apple silicon):** Couchcade-macos-arm64.zip, unzip, open Couchcade.app. It isn't notarized yet: if macOS blocks it, go to System Settings > Privacy & Security and click Open Anyway.
+          - **Windows:** Couchcade-windows-x64.exe. It isn't signed yet: if SmartScreen appears, click More info > Run anyway. Allow access on private networks when the firewall asks.
+          - **Linux:** couchcade-linux-x64 or couchcade-linux-arm64; \`chmod +x\` it, then run it.
+
+          Intel Mac, or anything else with Node.js 20+: \`npx couchcade\` or run from source (see the README)."
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Couchcade $TAG" --notes "$notes" --generate-notes
+          fi
+          gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber

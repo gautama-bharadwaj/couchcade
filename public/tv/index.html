@@ -38,6 +38,9 @@
     #qr { background: #fff; border-radius: 12px; padding: 10px; }
     #qr svg, #qrSmall svg { width: 100%; height: auto; display: block; }
     .url { margin-top: 12px; font-size: 1.25rem; font-weight: 700; word-break: break-all; }
+    /* The cursor is hidden on the TV page, but this one is meant to be clicked on a laptop screen. */
+    .switch { margin-top: 10px; background: none; border: 0; padding: 4px; color: var(--muted); font: inherit; font-size: .9rem; text-decoration: underline; cursor: pointer; }
+    .switch[hidden] { display: none; }
 
     /* Results */
     #results { align-items: center; justify-content: center; background: rgba(13, 15, 20, .82); }
@@ -79,6 +82,7 @@
         <p>Scan with your phone camera</p>
         <div id="qr"></div>
         <div class="url" id="url">…</div>
+        <button id="switchIp" class="switch" hidden>Wrong address? Switch (I)</button>
       </div>
     </div>
   </section>
