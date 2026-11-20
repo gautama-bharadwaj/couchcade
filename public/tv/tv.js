@@ -42,7 +42,7 @@ let ws;
 let pingMs = null;
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', role: 'tv' }));
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);

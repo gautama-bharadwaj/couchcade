@@ -32,7 +32,7 @@ function join() {
 }
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   $('conn').textContent = 'connecting…';
 
   ws.onopen = () => {

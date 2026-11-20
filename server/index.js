@@ -22,6 +22,8 @@ const TV_BACKLOG_BYTES = 64 * 1024;
 const PHONE_BACKLOG_BYTES = 16 * 1024;
 // Turn-based games often don't change for many ticks; the TV then gets a repeat at least this often.
 const TV_KEEPALIVE_MS = 1000;
+// On a shared network (office, dorm) you may not want the log readable by everyone on it.
+const LOG_API_OFF = process.env.DISABLE_LOG_API === '1';
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 // ---------------------------------------------------------------------------
@@ -76,8 +78,9 @@ const server = http.createServer(async (req, res) => {
       const qrSvg = await QRCode.toString(JOIN_URL, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
       return sendJson(res, { url: JOIN_URL, qrSvg, maxPlayers: MAX_PLAYERS, arena: ARENA, tickHz: TICK_HZ });
     }
-    if (url.pathname === '/api/logs') {
+    if (url.pathname === '/api/logs' && !LOG_API_OFF) {
       // Recent log lines plus live numbers, for debugging from any browser on the Wi-Fi.
+      // Anyone on the network can read it (player names, addresses), hence DISABLE_LOG_API=1.
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
       return res.end(`${statsLine()}\n\nLog level: ${log.level} · file: ${log.file ?? 'off'}\n\n${log.recent()}`);
     }
