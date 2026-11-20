@@ -24,11 +24,18 @@
     .logo span { color: var(--accent); }
     .tagline { color: var(--muted); margin: 4px 0 4vh; font-size: 1.3rem; }
     h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 12px; }
-    #games { list-style: none; padding: 0; margin: 0 0 4vh; display: grid; gap: 10px; }
-    #games li { padding: 16px 20px; border: 2px solid var(--line); border-radius: 14px; background: var(--panel); }
-    #games li.sel { border-color: var(--accent); }
-    #games .t { font-size: 1.5rem; font-weight: 700; }
-    #games .d { color: var(--muted); margin-top: 4px; }
+    /* Game picker: a grid of tiles that wraps to any number of games, plus the selected game's details. */
+    #games { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+    #games li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 14px; background: var(--panel); cursor: pointer; min-width: 0; }
+    #games li.sel { border-color: var(--accent); background: #1d2333; box-shadow: 0 0 0 4px rgba(255, 201, 60, .14); }
+    #games .icon { flex: none; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; font-size: 1.7rem; font-weight: 900; background: #232a3b; }
+    #games .t { font-size: 1.3rem; font-weight: 700; line-height: 1.15; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+    #games .m { color: var(--muted); font-size: 1rem; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #games .m.short { color: #ff8c8c; }
+    #games li > div { min-width: 0; }
+    #gameInfo { margin: 0 0 4vh; padding: 14px 18px; border-left: 4px solid var(--accent); border-radius: 0 12px 12px 0; background: rgba(255, 201, 60, .06); min-height: 3.2em; }
+    #gameInfo b { font-size: 1.35rem; }
+    #gameInfo span { display: block; color: var(--muted); font-size: 1.1rem; margin-top: 4px; }
     #players { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; }
     #players li { display: flex; align-items: center; gap: 12px; font-size: 1.35rem; font-weight: 600; min-width: 0; }
     #players li span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -52,10 +59,14 @@
       #lobby { padding: 4vh 5vw; }
       .logo { font-size: 3rem; }
       .tagline { margin-bottom: 2.5vh; font-size: 1.1rem; }
-      #games { gap: 6px; margin-bottom: 2.5vh; }
-      #games li { padding: 9px 16px; }
-      #games .t { font-size: 1.2rem; }
-      #games li:not(.sel) .d { display: none; }
+      #games { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+      #games li { padding: 8px 10px; gap: 10px; }
+      #games .icon { width: 34px; height: 34px; font-size: 1.2rem; border-radius: 9px; }
+      #games .t { font-size: 1.05rem; }
+      #games .m { font-size: .8rem; }
+      #gameInfo { margin-bottom: 2.5vh; padding: 10px 14px; }
+      #gameInfo b { font-size: 1.15rem; }
+      #gameInfo span { font-size: 1rem; }
       #players li { font-size: 1.15rem; }
       .qrbox { padding: 16px; }
     }
@@ -92,6 +103,7 @@
       <p class="tagline">Party games on the big screen. Your phone is the controller.</p>
       <h2>Games</h2>
       <ul id="games"></ul>
+      <div id="gameInfo"></div>
       <h2>Players</h2>
       <ul id="players"></ul>
       <div id="hint">Scan the code to join.</div>

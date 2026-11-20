@@ -9,6 +9,8 @@ const BOOST = 2.2;
 export default {
   id: 'sandbox',
   title: 'Sandbox',
+  category: 'extras',
+  icon: '🧪',
   description: 'Steer a dot around. For testing controllers.',
   minPlayers: 1,
   maxPlayers: 8,

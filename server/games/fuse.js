@@ -59,7 +59,9 @@ const ORD = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 export default {
   id: 'fuse',
   title: 'Fuse',
-  description: 'Draw from the crate and pray it isn’t a Bomb. Last one standing wins. 2–8 players.',
+  category: 'cards',
+  icon: '💣',
+  description: 'Draw from the crate and pray it isn’t a Bomb. Last one standing wins.',
   minPlayers: 2,
   maxPlayers: 8,
   controller: { type: 'screens' },
