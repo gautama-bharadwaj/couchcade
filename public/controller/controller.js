@@ -142,23 +142,65 @@ function renderLobby(isHost) {
     ? `You're the host · ${count} player${count === 1 ? '' : 's'} in. Pick a game:`
     : `${count} player${count === 1 ? '' : 's'} in. Waiting for ${host?.name ?? 'the host'} to start…`;
 
-  const list = $('gameList');
-  list.innerHTML = '';
-  for (const g of phase.games) {
-    const b = document.createElement('button');
-    if (g.id === phase.gameId) b.className = 'sel';
-    b.disabled = !isHost;
-    b.innerHTML = '<div class="t"></div><div class="d"></div>';
-    b.querySelector('.t').textContent = g.title;
-    b.querySelector('.d').textContent = g.description;
-    b.addEventListener('click', () => cmd({ t: 'select', gameId: g.id }));
-    list.append(b);
-  }
+  renderPicker(isHost);
   $('startBtn').style.display = isHost ? '' : 'none';
   $('botRow').style.display = isHost ? 'flex' : 'none';
   $('removeBotBtn').disabled = !phase.players.some((p) => p.bot);
   $('addBotBtn').disabled = phase.players.length >= 8;
 }
+
+// Game picker. Only the host sees the tiles; everyone sees the selected game in the footer.
+// Tabs filter by category (from each game's `category`, so new games need nothing here) and
+// appear once there is more than one category.
+let pickTab = 'all';
+function renderPicker(isHost) {
+  const games = phase.games;
+  const players = phase.players.filter((p) => p.connected).length;
+  const cats = [...new Set(games.map((g) => g.category))];
+  if (pickTab !== 'all' && !cats.includes(pickTab)) pickTab = 'all';
+
+  const tabs = $('tabs');
+  tabs.innerHTML = '';
+  tabs.style.display = isHost && cats.length > 1 ? '' : 'none';
+  for (const c of ['all', ...cats]) {
+    const b = document.createElement('button');
+    b.textContent = c === 'all' ? `All ${games.length}` : titleCase(c);
+    if (c === pickTab) b.className = 'on';
+    b.addEventListener('click', () => {
+      pickTab = c;
+      renderPicker(isHost);
+    });
+    tabs.append(b);
+  }
+
+  const list = $('gameList');
+  list.innerHTML = '';
+  list.style.display = isHost ? '' : 'none';
+  for (const g of games) {
+    if (pickTab !== 'all' && g.category !== pickTab) continue;
+    const b = document.createElement('button');
+    if (g.id === phase.gameId) b.className = 'sel';
+    b.innerHTML = '<span class="icon"></span><div><div class="t"></div><div class="m"></div></div>';
+    b.querySelector('.icon').textContent = g.icon || g.title[0];
+    b.querySelector('.t').textContent = g.title;
+    const short = players < g.minPlayers;
+    const m = b.querySelector('.m');
+    m.textContent = short ? `needs ${g.minPlayers}+` : `${playerRange(g)} players`;
+    m.classList.toggle('short', short);
+    b.addEventListener('click', () => cmd({ t: 'select', gameId: g.id }));
+    list.append(b);
+  }
+
+  const sel = games.find((g) => g.id === phase.gameId);
+  $('pickFoot').classList.toggle('guest', !isHost);
+  $('gameDetail').querySelector('.t').textContent = sel ? `${isHost ? '' : 'Up next: '}${sel.icon ? `${sel.icon} ` : ''}${sel.title}` : '';
+  $('gameDetail').querySelector('.d').textContent = sel
+    ? `${sel.description}${players < sel.minPlayers ? ` Needs ${sel.minPlayers}+ players.` : ''}`
+    : '';
+}
+
+const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const playerRange = (g) => (g.minPlayers === g.maxPlayers ? `${g.minPlayers}` : `${g.minPlayers}–${g.maxPlayers}`);
 
 function renderResults(results) {
   if (!results) return;

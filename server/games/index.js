@@ -6,6 +6,8 @@
 // Server game contract:
 //   export default {
 //     id, title, description,
+//     category: 'action',   // picker tab: action | party | cards | extras, or any new word (shown capitalized)
+//     icon: '🚗',           // one emoji for the picker tile (optional; the first letter is used otherwise)
 //     minPlayers, maxPlayers,
 //     controller: { buttons: [{ id: 'a', label: 'Dash' }] },   // phone layout: joystick + up to 2 buttons (a, b)
 //              or { type: 'screens' },                          // phone shows the game's own screens (see below)
@@ -55,7 +57,15 @@ export const GAMES = [bumper, stickup, gala, shed, fuse, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
-/** What the TV and phones need to show a game picker. */
+/**
+ * What the TV and phones need to show a game picker. Games are grouped by category, in the order
+ * each category first appears in GAMES (so a new category needs no change here); a game without
+ * one goes under "Other". The order is the same on the TV and every phone, so arrow keys match.
+ */
 export function gameList() {
-  return GAMES.map(({ id, title, description, minPlayers, maxPlayers }) => ({ id, title, description, minPlayers, maxPlayers }));
+  const list = GAMES.map(({ id, title, description, icon, category, minPlayers, maxPlayers }) => ({
+    id, title, description, icon: icon ?? null, category: String(category || 'other').toLowerCase(), minPlayers, maxPlayers,
+  }));
+  const order = [...new Set(list.map((g) => g.category))];
+  return list.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category)); // stable sort
 }

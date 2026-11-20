@@ -2,7 +2,7 @@
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
 // Keys (any keyboard on the computer driving the TV):
-//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game · I switch join address
+//   arrows pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game · I switch join address
 
 import { renderers } from './games/index.js';
 import audio from './audio.js';
@@ -122,23 +122,55 @@ function onPhase(msg) {
   if (msg.phase === 'results' && msg.results) renderResults(msg.results);
 }
 
+// Game picker: one tile per registered game (any number; the grid wraps), in the server's order,
+// which groups games by category. The selected game's description shows under the grid.
+let shownGameId = null;
 function renderGames(msg) {
   const list = $('games');
+  const players = msg.players.filter((p) => p.connected).length;
   list.innerHTML = '';
   for (const g of msg.games) {
     const li = document.createElement('li');
     if (g.id === msg.gameId) li.className = 'sel';
-    li.innerHTML = '<div class="t"></div><div class="d"></div>';
+    li.innerHTML = '<span class="icon"></span><div><div class="t"></div><div class="m"></div></div>';
+    li.querySelector('.icon').textContent = g.icon || g.title[0];
     li.querySelector('.t').textContent = g.title;
-    li.querySelector('.d').textContent = g.description;
+    const short = players > 0 && players < g.minPlayers;
+    const m = li.querySelector('.m');
+    m.textContent = `${titleCase(g.category)} · ${short ? `needs ${g.minPlayers}+` : playerRange(g)}`;
+    m.classList.toggle('short', short);
+    li.addEventListener('click', () => sendCmd({ t: 'select', gameId: g.id }));
     list.append(li);
   }
+  if (msg.gameId !== shownGameId) list.querySelector('.sel')?.scrollIntoView({ block: 'nearest' }); // only on a new pick, so it never fights scrolling
+  shownGameId = msg.gameId;
+
   const host = msg.players.find((p) => p.id === msg.hostId);
   const sel = msg.games.find((g) => g.id === msg.gameId);
+  const info = $('gameInfo');
+  info.innerHTML = '<b></b><span></span>';
+  info.querySelector('b').textContent = sel ? `${sel.icon ? `${sel.icon} ` : ''}${sel.title}` : '';
+  info.querySelector('span').textContent = sel ? `${sel.description} (${playerRange(sel)} players)` : '';
   $('hint').textContent = host ? `${host.name} picks the game and presses Start on their phone.` : 'Scan the code to join.';
-  if (sel && host && msg.players.filter((p) => p.connected).length < sel.minPlayers) {
+  if (sel && host && players < sel.minPlayers) {
     $('hint').textContent = `${sel.title} needs ${sel.minPlayers}+ players.`;
   }
+}
+
+const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const playerRange = (g) => (g.minPlayers === g.maxPlayers ? `${g.minPlayers}` : `${g.minPlayers}–${g.maxPlayers}`);
+
+/** Arrow keys move through the picker grid: ←/→ one tile, ↑/↓ one row (as many tiles as fit across). */
+function moveSelection(key) {
+  const games = phase.games;
+  const cols = getComputedStyle($('games')).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+  const step = { arrowleft: -1, arrowright: 1, arrowup: -cols, arrowdown: cols }[key];
+  const i = games.findIndex((g) => g.id === phase.gameId);
+  let next = i + step;
+  if (Math.abs(step) === 1) next = (next + games.length) % games.length; // ←/→ wrap around
+  else if (next >= games.length) next = Math.floor(i / cols) < Math.floor((games.length - 1) / cols) ? games.length - 1 : i; // ↓ into a short last row
+  else if (next < 0) next = i; // ↑ stops at the top row
+  if (next !== i) sendCmd({ t: 'select', gameId: games[next].id });
 }
 
 function renderPlayers(msg) {
@@ -340,10 +372,9 @@ window.addEventListener('keydown', (e) => {
   if (key === 'j' && phase?.phase === 'playing') $('joinSmall').classList.toggle('show');
   if (key === 'i' && !e.repeat) switchJoinAddress();
   if (!phase) return;
-  if (phase.phase === 'lobby' && (key === 'arrowdown' || key === 'arrowup')) {
-    const i = phase.games.findIndex((g) => g.id === phase.gameId);
-    const next = phase.games.at((i + (key === 'arrowdown' ? 1 : -1)) % phase.games.length);
-    sendCmd({ t: 'select', gameId: next.id });
+  if (phase.phase === 'lobby' && key.startsWith('arrow')) {
+    e.preventDefault(); // the lobby scrolls in a short window; arrows pick games instead
+    moveSelection(key);
   }
   if (phase.phase === 'lobby' && key === 'enter') sendCmd({ t: 'start' });
   if (phase.phase === 'lobby' && key === 'b') sendCmd({ t: e.shiftKey ? 'removeBot' : 'addBot' });

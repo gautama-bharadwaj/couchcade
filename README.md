@@ -73,7 +73,7 @@ Flags work with the downloads, `npx couchcade` and `npm start --`; `couchcade --
 2. The host picks a game on their phone and taps **Start**.
 3. When the game ends, everyone sees the results, then it goes back to the lobby.
 
-TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one).
+TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one).
 
 ### Sound
 
@@ -139,7 +139,7 @@ scripts/
 
 ### Adding a game
 
-1. `server/games/<id>.js`: export `{ id, title, description, minPlayers, maxPlayers, controller, create }`. The contract is documented at the top of `server/games/index.js`.
+1. `server/games/<id>.js`: export `{ id, title, description, category, icon, minPlayers, maxPlayers, controller, create }`. `category` (such as `action`, `party` or `cards`) puts the game under that tab in the phone's game picker, and `icon` is one emoji for its tile on the TV and phone. The contract is documented at the top of `server/games/index.js`.
 2. `public/tv/games/<id>.js`: export `{ draw(ctx, { prev, cur, alpha, arena, now }) }`, and optionally `onSnapshot(prev, cur, audio)` for sound effects and narration (see `public/tv/audio.js`).
 3. Register it in `server/games/index.js` and `public/tv/games/index.js`.
 

@@ -106,7 +106,9 @@ const ARENAS = [
 export default {
   id: 'stickup',
   title: 'Stickup',
-  description: 'Stick-figure brawl with weapon drops and deadly arenas. 2–8 players.',
+  category: 'action',
+  icon: '🤺',
+  description: 'Stick-figure brawl with weapon drops and deadly arenas.',
   minPlayers: 2,
   maxPlayers: 8,
   controller: { buttons: [{ id: 'a', label: 'Jump' }, { id: 'b', label: 'Hit' }] },
