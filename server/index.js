@@ -560,10 +560,14 @@ async function start() {
     `  Phones join: ${joinUrl}   (scan the QR code on the TV)`,
   ];
   if (port !== PORT) lines.push(`  Note:        port ${PORT} was busy, so this uses ${port}.`);
-  if (primary === 'localhost') lines.push("  Warning:     no network address found, so phones can't join. Connect to Wi-Fi or set HOST_IP.");
-  else if (!process.env.HOST_IP && existsSync('/.dockerenv')) {
+  // In a Docker bridge network the only address is the container's own (skipped, or 172.16-31.x),
+  // which phones can't reach. With --network host it finds the real one and needs no warning.
+  const dockerBridge = existsSync('/.dockerenv') && !process.env.HOST_IP && (primary === 'localhost' || /^172\.(1[6-9]|2\d|3[01])\./.test(primary));
+  if (dockerBridge) {
     lines.push("  Warning:     in Docker the container's own address isn't reachable from phones.");
-    lines.push('               Set HOST_IP to this computer\'s LAN address, or use --network host (Linux).');
+    lines.push("               Set HOST_IP to this computer's LAN address, or use --network host (Linux).");
+  } else if (primary === 'localhost') {
+    lines.push("  Warning:     no network address found, so phones can't join. Connect to Wi-Fi or set HOST_IP.");
   }
   lines.push(
     `  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more)${LOG_API_OFF ? '' : ` · http://localhost:${port}/api/logs`}`,
