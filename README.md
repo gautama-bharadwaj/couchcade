@@ -81,7 +81,7 @@ The TV plays synthesized sound effects and a narrator using the browser's built-
 
 ### Playing with bots
 
-The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Fuse they peek before risky draws and love hiding Bombs on top for the next player; in Bumper Arena they chase and shove, in Stickup they grab weapons and fight; in Sandbox they stand still).
+The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Fuse they peek before risky draws and love hiding Bombs on top for the next player; in Bumper Arena they chase and shove, in Stickup they grab weapons and fight; in Pillow Fort Siege they ferry cushions into a stepped fort, then lob pillows at the other teddy while one stays home to patch the walls; in Sandbox they stand still).
 
 ### Testing without phones
 
@@ -96,6 +96,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 | **Midnight Gala** | Phone screens | Hidden roles for 4–8. Secret Thieves steal gems at night; everyone picks rooms, compares alibis and evidence, and votes people out. Roles: Thief, Detective, Bodyguard (5+), Gossip (6+), Guest. |
 | **Fuse** | Phone screens | Push-your-luck card game for 2–8 in a fireworks workshop. Play cards from your hand, then draw from the crate; draw a Bomb and you're out unless you douse it with a Bucket (then secretly hide it back in the crate) or cut the right one of three wires (1 in 3). Decoys look like Bombs when you peek but just go pop. Cards: Bucket, Periscope (see top 3), Nudge (see the top card, bury it), Duck (skip your draw), Hot Potato (next player owes your draws + 1), Boomerang (send a Hot Potato back), Stir, Back Door (draw from the bottom), Swipe (steal a random card), X-Ray (see a hand). The TV shows the odds of a Bomb and a burning fuse as the turn timer. Last one standing wins. |
 | **Shed!** | Phone screens | Color-matching card game for 2–8. Your hand is on your phone; match the top card's color or number, use Skip / Reverse / Draw 2 / Wilds, stack +2s and +4s to pass the penalty along, and tap "Last card!" before someone catches you. 108-card deck, 7 each. |
+| **Pillow Fort Siege** | Joystick + Jump + Grab/Throw | Two teams (2–8 players) and a teddy bear in each fort. **Build** (35 s): grab cushions from the laundry pile in the middle and press B to stack one on the column in front of you (the TV shows where it'll land). **Siege** (75 s): hold B to wind up a pillow, aim with the stick (the TV draws the arc) and let go. Two pillows knock a cushion out and the stack above drops; a carried cushion hurled from outside your fort knocks one out at once. Pillows fly through your own fort and bonk enemies, making them drop what they carry. Hit the other teddy to win the round, or have the bigger fort when time runs out. First team to 2 rounds. Sound effects only. |
 | Sandbox | Joystick + Boost | Steer a dot around. For testing controllers and latency. |
 
 ## Architecture
@@ -221,6 +222,7 @@ To build only for the machine you're on: `npm run build:release` (needs Node 25.
 - [x] Shed! (color-matching card game)
 - [x] Fuse (push-your-luck bomb card game)
 - [x] Stickup (stick-figure brawler; tune weapons and arenas on real phones)
+- [x] Pillow Fort Siege (team fort building and pillow siege; tune timings on real phones)
 - [ ] M4 Polish: sounds, keep phones awake, Draw & Guess
 - [x] M5 Portable: any OS with a browser; downloads for macOS, Windows and Linux, `npx`, Docker; smarter QR address
 - [ ] M6 Signed and notarized downloads, publish to npm
