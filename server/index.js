@@ -1,5 +1,4 @@
 import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +6,7 @@ import QRCode from 'qrcode';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { log } from './log.js';
+import { joinAddresses } from './address.js';
 import { Lobby, MAX_PLAYERS } from './lobby.js';
 import { Session } from './session.js';
 import { ARENA } from './arena.js';
@@ -26,31 +26,10 @@ const TV_KEEPALIVE_MS = 1000;
 const LOG_API_OFF = process.env.DISABLE_LOG_API === '1';
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-// ---------------------------------------------------------------------------
-// LAN address: what phones will type / scan. Prefer Wi-Fi (en0 on a Mac, wlan0 on a Pi).
-// Override with HOST_IP=192.168.x.y npm start if it picks the wrong one.
-// ---------------------------------------------------------------------------
-function lanAddress() {
-  if (process.env.HOST_IP) return process.env.HOST_IP;
-  const ifaces = os.networkInterfaces();
-  const preferred = ['en0', 'wlan0', 'en1', 'eth0'];
-  const candidates = [];
-  for (const [name, addrs] of Object.entries(ifaces)) {
-    for (const a of addrs ?? []) {
-      if (a.family === 'IPv4' && !a.internal) candidates.push({ name, address: a.address });
-    }
-  }
-  candidates.sort((a, b) => rank(a.name) - rank(b.name));
-  return candidates[0]?.address ?? 'localhost';
-
-  function rank(name) {
-    const i = preferred.indexOf(name);
-    return i === -1 ? preferred.length : i;
-  }
-}
-
-const HOST_IP = lanAddress();
-const JOIN_URL = `http://${HOST_IP}:${PORT}/`;
+// Phones join at http://<LAN address>:<port>/. The address is worked out per request (see
+// address.js), so reloading the TV after the machine changes networks shows the right code.
+let port = PORT; // the port actually bound, once listening
+const joinUrlFor = (address) => `http://${address}:${port}/`;
 
 // ---------------------------------------------------------------------------
 // HTTP: static files + a tiny join-info API
@@ -75,8 +54,23 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
 
     if (url.pathname === '/api/join-info') {
-      const qrSvg = await QRCode.toString(JOIN_URL, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
-      return sendJson(res, { url: JOIN_URL, qrSvg, maxPlayers: MAX_PLAYERS, arena: ARENA, tickHz: TICK_HZ });
+      // ?ip= picks another of this machine's addresses (the TV's "Switch" control). Only real
+      // candidates are accepted, so the TV can never be made to show a code for some other host.
+      const { primary, candidates } = await joinAddresses();
+      const ip = url.searchParams.get('ip');
+      if (ip && !candidates.some((c) => c.address === ip)) return sendJson(res, { error: 'Not an address of this machine' }, 400);
+      const address = ip || primary;
+      const joinUrl = joinUrlFor(address);
+      const qrSvg = await QRCode.toString(joinUrl, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
+      return sendJson(res, {
+        url: joinUrl,
+        address,
+        qrSvg,
+        candidates: candidates.map((c) => ({ ...c, url: joinUrlFor(c.address) })),
+        maxPlayers: MAX_PLAYERS,
+        arena: ARENA,
+        tickHz: TICK_HZ,
+      });
     }
     if (url.pathname === '/api/logs' && !LOG_API_OFF) {
       // Recent log lines plus live numbers, for debugging from any browser on the Wi-Fi.
@@ -103,8 +97,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-function sendJson(res, obj) {
-  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+function sendJson(res, obj, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
 
@@ -486,15 +480,20 @@ setInterval(() => {
   }
 }, 5000);
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('');
-  console.log('  Couchcade server running');
-  console.log(`  TV screen:   http://localhost:${PORT}/tv`);
-  console.log(`  Phones join: ${JOIN_URL}`);
-  console.log(`  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more) · http://localhost:${PORT}/api/logs`);
-  console.log('');
-  log.info('server', `started on ${JOIN_URL} at ${TICK_HZ} ticks/s, node ${process.version}`);
-});
+async function start() {
+  const { primary } = await joinAddresses();
+  server.listen(PORT, '0.0.0.0', () => {
+    const joinUrl = joinUrlFor(primary);
+    console.log('');
+    console.log('  Couchcade server running');
+    console.log(`  TV screen:   http://localhost:${port}/tv`);
+    console.log(`  Phones join: ${joinUrl}`);
+    console.log(`  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more) · http://localhost:${port}/api/logs`);
+    console.log('');
+    log.info('server', `started on ${joinUrl} at ${TICK_HZ} ticks/s, node ${process.version}`);
+  });
+}
+start();
 
 server.on('error', (err) => {
   log.error('server', `can't listen on port ${PORT}: ${err.message}`);
