@@ -104,6 +104,7 @@ export default {
       eseq: 0,
       selected: new Map(), // id -> card id they tapped (to read it before playing)
       peek: new Map(), // id -> { title, cards: [kind], lines } private info shown on their phone
+      guide: new Set(), // ids reading the card guide on their phone
     };
     // What each player believes the top of the crate holds (card ids, in order). Used for bots
     // and kept honest: a player only "knows" what their own cards showed them.
@@ -368,7 +369,8 @@ export default {
     }
 
     // ---- Phone screens --------------------------------------------------------
-    const cardView = (c, playable) => ({ id: c.id, label: ICON[c.kind], small: CARDS[c.kind].name, color: CARDS[c.kind].color, playable });
+    // Every card in your hand can be tapped to read it; on your turn, ones you can't play right now are dimmed.
+    const cardView = (c, dim) => ({ id: c.id, label: ICON[c.kind], small: CARDS[c.kind].name, color: CARDS[c.kind].color, dim });
 
     function screenFor(id) {
       if (!hands.has(id)) return { title: 'Game in progress', lines: ['You can join the next game. Watch the TV!'] };
@@ -442,6 +444,23 @@ export default {
         return s;
       }
 
+      if (st.guide.has(id)) {
+        s.title = '📖 What the cards do';
+        s.lines = [
+          'On your turn, play as many cards as you like (or none), then draw one from the crate. Drawing ends your turn.',
+          "Draw a Bomb and you're out, unless you douse it with a Bucket or cut the right wire. Last one standing wins.",
+        ];
+        const count = (k) => hand.filter((c) => c.kind === k).length;
+        // Cards in your hand first, then the rest.
+        for (const k of [...KIND_ORDER].sort((x, y) => (count(y) > 0) - (count(x) > 0))) {
+          const have = count(k);
+          s.cards.push({ label: `${ICON[k]} ${CARDS[k].name}${have ? ` · you have ${have}` : ''}`, sub: CARDS[k].text, color: CARDS[k].color });
+        }
+        s.actions = [{ key: 'back', label: 'Back to my hand', style: 'primary' }];
+        s.footer = me ? `${st.left}s` : '';
+        return s;
+      }
+
       const peek = st.peek.get(id);
       if (peek) {
         s.title = peek.title;
@@ -454,12 +473,14 @@ export default {
 
       s.title = me ? (st.owed > 1 ? `Your turn ×${st.owed}` : 'Your turn') : 'Your hand';
       const sel = hand.find((c) => c.id === st.selected.get(id));
-      s.hand = { key: 'sel', cards: hand.map((c) => cardView(c, me ? canPlay(id, c) : true)) };
+      s.hand = { key: 'sel', cards: hand.map((c) => ({ ...cardView(c, me && !canPlay(id, c)), selected: c === sel })) };
       if (sel) {
-        s.cards.push({ label: `${ICON[sel.kind]} ${CARDS[sel.kind].name}`, sub: CARDS[sel.kind].text, color: CARDS[sel.kind].color });
+        const why = me && !canPlay(id, sel) ? WHY_NOT[sel.kind] : '';
+        s.cards.push({ label: `${ICON[sel.kind]} ${CARDS[sel.kind].name}`, sub: CARDS[sel.kind].text + (why ? ` ${why}` : ''), color: CARDS[sel.kind].color });
         if (me && canPlay(id, sel)) s.actions.push({ key: 'play', label: `Play ${CARDS[sel.kind].name}`, style: 'primary' });
       } else s.lines.push(me ? 'Tap a card to read it and play it, or draw to end your turn.' : 'Tap a card to read what it does.');
       if (me) s.actions.push({ key: 'draw', label: st.owed > 1 ? `Draw (${st.owed} to go)` : 'Draw and end turn', style: sel && canPlay(id, sel) ? 'secondary' : 'primary' });
+      s.actions.push({ key: 'guide', label: '📖 What do the cards do?', style: 'secondary' });
       s.footer = me ? `${st.left}s` : '';
       return s;
     }
@@ -552,6 +573,8 @@ export default {
           return;
         }
         if (key === 'ok') return void st.peek.delete(id);
+        if (key === 'guide') return void st.guide.add(id);
+        if (key === 'back') return void st.guide.delete(id);
         if (current() !== id) return;
 
         switch (st.phase) {
@@ -661,6 +684,14 @@ export default {
 
 // Card faces on the phone: an icon plus the name underneath.
 const ICON = { bomb: '💣', decoy: '💣', bucket: '🪣', scope: '🔭', nudge: '👉', duck: '🦆', potato: '🥔', boomerang: '🪃', stir: '🌀', backdoor: '🚪', swipe: '🧲', xray: '👁️' };
+
+// Shown under a card you tapped on your turn but can't play right now.
+const WHY_NOT = {
+  bucket: "You don't play it from your hand. You get to use it the moment you draw a Bomb.",
+  boomerang: 'Only after someone passes you a Hot Potato.',
+  swipe: 'Nobody has a card to take.',
+  xray: 'Nobody has a card to see.',
+};
 
 // Decoys are disguised as Bombs whenever someone peeks.
 const looks = (kind) => (kind === 'decoy' ? 'bomb' : kind);

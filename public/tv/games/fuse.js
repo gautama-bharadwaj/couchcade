@@ -4,20 +4,22 @@
 
 import { circle, text } from './util.js';
 
+// short: the card legend on the left. text: the caption under the pile when someone plays it.
 const CARD = {
-  bomb: { name: 'Bomb', color: '#ff4d3d' },
-  decoy: { name: 'Decoy', color: '#ff4d3d' },
-  bucket: { name: 'Bucket', color: '#38b6ff' },
-  scope: { name: 'Periscope', color: '#a77bff' },
-  nudge: { name: 'Nudge', color: '#c48bff' },
-  duck: { name: 'Duck', color: '#3ddc84' },
-  potato: { name: 'Hot Potato', color: '#ff9f1c' },
-  boomerang: { name: 'Boomerang', color: '#ffd23f' },
-  stir: { name: 'Stir', color: '#2ee6d6' },
-  backdoor: { name: 'Back Door', color: '#7bd389' },
-  swipe: { name: 'Swipe', color: '#ff6fd8' },
-  xray: { name: 'X-Ray', color: '#8fd3ff' },
+  bomb: { name: 'Bomb', color: '#ff4d3d', short: "you're out, unless saved" },
+  decoy: { name: 'Decoy', color: '#ff4d3d', short: 'a fake Bomb, harmless' },
+  bucket: { name: 'Bucket', color: '#38b6ff', short: 'survive a drawn Bomb' },
+  scope: { name: 'Periscope', color: '#a77bff', short: 'peek at the top 3', text: 'They secretly saw the top 3 cards of the crate.' },
+  nudge: { name: 'Nudge', color: '#c48bff', short: 'see top card, may bury it', text: 'They saw the top card and may bury it at the bottom.' },
+  duck: { name: 'Duck', color: '#3ddc84', short: 'skip one draw', text: 'One draw skipped.' },
+  potato: { name: 'Hot Potato', color: '#ff9f1c', short: 'skip; next player draws +1', text: 'Turn over without drawing. The next player owes all those draws, plus one.' },
+  boomerang: { name: 'Boomerang', color: '#ffd23f', short: 'throw a Hot Potato back', text: 'All the owed draws fly straight back to whoever passed the Hot Potato.' },
+  stir: { name: 'Stir', color: '#2ee6d6', short: 'shuffle the crate', text: 'The crate is shuffled. Whatever anyone peeked at is lost.' },
+  backdoor: { name: 'Back Door', color: '#7bd389', short: 'draw from the bottom', text: 'They draw from the bottom of the crate instead of the top.' },
+  swipe: { name: 'Swipe', color: '#ff6fd8', short: 'steal a random card', text: 'They take a random card from another player.' },
+  xray: { name: 'X-Ray', color: '#8fd3ff', short: "see someone's hand", text: "They get to look at another player's whole hand." },
 };
+const LEGEND = ['bomb', 'decoy', 'bucket', 'scope', 'nudge', 'duck', 'potato', 'boomerang', 'stir', 'backdoor', 'swipe', 'xray'];
 const WIRE_COLORS = { red: '#ff4d3d', blue: '#38b6ff', yellow: '#ffd23f' };
 
 const DECK = { x: 560, y: 420 };
@@ -36,6 +38,7 @@ let banner = null; // { text, color, at, dur, size }
 let boomAt = -1e9;
 let pileBumpAt = 0;
 let embers = [];
+let played = null; // { kind, by, color, at } the last card played, for the caption and legend glow
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -59,6 +62,7 @@ function onEvent(s, e, now) {
   const name = s.players.find((p) => p.id === e.by)?.name ?? '';
   switch (e.kind) {
     case 'play':
+      played = { kind: e.card, by: name, color: s.players.find((p) => p.id === e.by)?.color ?? '#ffe8c2', at: now };
       flights.push({ kind: e.card, face: true, from: by, to: PILE, at: now, dur: 380 });
       pileBumpAt = now + 380;
       if (e.card === 'stir') for (let i = 0; i < 5; i++) flights.push({ back: true, from: { x: DECK.x + rnd(-120, 120), y: DECK.y + rnd(-90, 90) }, to: DECK, at: now + i * 70, dur: 300 });
@@ -230,8 +234,10 @@ export default {
       if (s.owed > 1) text(ctx, `owes ${s.owed} draws`, W / 2, 288, { size: 26, weight: 800, color: '#ff9f1c' });
     }
 
+    legend(ctx, now);
     crate(ctx, s, now);
     pile(ctx, s, now);
+    caption(ctx, now);
     gauge(ctx, s, now);
 
     s.players.forEach((p) => seat(ctx, p, seatPos(s, p.id), s, now));
@@ -432,6 +438,54 @@ function pile(ctx, s, now) {
   const t = (now - pileBumpAt) / 260;
   const pop = t > 0 && t < 1 ? Math.sin(t * Math.PI) * 0.12 : 0;
   cardFace(ctx, s.discard, x, y, 1 + pop, now);
+}
+
+// What every card does, always on screen. The card just played glows.
+function legend(ctx, now) {
+  const x = 80;
+  const y0 = 340;
+  const row = 27;
+  text(ctx, 'THE CARDS', x, y0 - 14, { size: 18, weight: 900, align: 'left', color: '#8a7a6a' });
+  LEGEND.forEach((k, i) => {
+    const c = CARD[k];
+    const y = y0 + i * row;
+    const glow = played?.kind === k ? Math.max(0, 1 - (now - played.at) / 4000) : 0;
+    if (glow > 0) {
+      ctx.globalAlpha = 0.25 * glow;
+      ctx.fillStyle = c.color;
+      roundRect(ctx, x - 8, y - 2, 380, row - 2, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = c.color;
+    roundRect(ctx, x, y + 4, 12, 16, 3);
+    ctx.fill();
+    text(ctx, c.name, x + 22, y + 19, { size: 17, weight: 800, align: 'left', color: c.color });
+    text(ctx, c.short, x + 132, y + 19, { size: 16, weight: 500, align: 'left', color: glow > 0 ? '#ffe8c2' : '#a8998a' });
+  });
+}
+
+// "Sam played Hot Potato" and what it did, under the pile, for a few seconds.
+function caption(ctx, now) {
+  if (!played || !CARD[played.kind]?.text) return;
+  const t = (now - played.at) / 5000;
+  if (t >= 1) return;
+  ctx.globalAlpha = t > 0.85 ? (1 - t) / 0.15 : Math.min(1, (now - played.at) / 250);
+  const x = PILE.x;
+  text(ctx, `${played.by} played ${CARD[played.kind].name}`, x, 598, { size: 26, weight: 900, color: played.color });
+  wrapText(ctx, CARD[played.kind].text, 600).forEach((line, i) => text(ctx, line, x, 628 + i * 26, { size: 21, weight: 600, color: '#ffe8c2' }));
+  ctx.globalAlpha = 1;
+}
+
+function wrapText(ctx, str, maxW) {
+  ctx.font = '600 21px system-ui, -apple-system, sans-serif';
+  const lines = [''];
+  for (const w of str.split(' ')) {
+    const tryLine = lines.at(-1) ? `${lines.at(-1)} ${w}` : w;
+    if (ctx.measureText(tryLine).width > maxW && lines.at(-1)) lines.push(w);
+    else lines[lines.length - 1] = tryLine;
+  }
+  return lines;
 }
 
 // The odds: a dial from safe (green) to doom (red), plus "N Bombs in M cards".

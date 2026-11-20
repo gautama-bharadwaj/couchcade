@@ -35,7 +35,8 @@
 //       locked: false,                     // true = shown but not tappable
 //     },
 //     hand: {                              // tappable playing cards; sends { key, value: card.id }
-//       key: 'play', cards: [{ id, label, color, small?, playable? }],  // playable:false = dimmed, not tappable
+//       key: 'play', cards: [{ id, label, color, small?, playable?, dim?, selected? }],
+//       // playable:false = dimmed, not tappable; dim:true = dimmed but still tappable; selected:true = raised
 //     },
 //     input: { key: 'msg', placeholder, maxLength, submitLabel },  // text box; sends { key, value: text }
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
