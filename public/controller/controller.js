@@ -248,7 +248,7 @@ function renderScreen(screen) {
     const { key, cards = [] } = screen.hand;
     const hand = el('div', 'hand');
     for (const c of cards) {
-      const b = el('button', `pcard${c.color ? '' : ' wild'}`);
+      const b = el('button', `pcard${c.color ? '' : ' wild'}${c.dim ? ' dim' : ''}${c.selected ? ' sel' : ''}`);
       if (c.color) b.style.setProperty('--card', c.color);
       b.append(document.createTextNode(c.label));
       if (c.small) b.append(el('small', '', c.small));
