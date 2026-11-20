@@ -81,7 +81,7 @@ export default {
   title: 'Hot Potato Pileup',
   description: 'Tackle someone to pass the ticking bomb before it blows. 2–8 players.',
   category: 'party',
-  icon: '💣',
+  icon: '🥔',
   minPlayers: 2,
   maxPlayers: 8,
   controller: { buttons: [{ id: 'a', label: 'Tackle' }, { id: 'b', label: 'Dodge' }] },
