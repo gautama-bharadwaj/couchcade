@@ -1,5 +1,4 @@
 import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -7,11 +6,16 @@ import QRCode from 'qrcode';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { log } from './log.js';
+import { joinAddresses } from './address.js';
 import { Lobby, MAX_PLAYERS } from './lobby.js';
 import { Session } from './session.js';
 import { ARENA } from './arena.js';
 
+// PORT set: use exactly that port (and stop if it's busy). Not set: 3000, or if another app
+// already has it, the first free one of 3001-3010.
+const PORT_SET = Boolean(process.env.PORT);
 const PORT = Number(process.env.PORT) || 3000;
+const PORT_TRIES = PORT_SET ? 1 : 11;
 // 60 ticks a second: an input waits at most ~17 ms for the next tick (it was ~33 ms at 30).
 // TICK_HZ=30 npm start halves the CPU work if a small machine struggles.
 const TICK_HZ = Number(process.env.TICK_HZ) || 60;
@@ -24,31 +28,10 @@ const PHONE_BACKLOG_BYTES = 16 * 1024;
 const TV_KEEPALIVE_MS = 1000;
 const PUBLIC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
-// ---------------------------------------------------------------------------
-// LAN address: what phones will type / scan. Prefer Wi-Fi (en0 on a Mac, wlan0 on a Pi).
-// Override with HOST_IP=192.168.x.y npm start if it picks the wrong one.
-// ---------------------------------------------------------------------------
-function lanAddress() {
-  if (process.env.HOST_IP) return process.env.HOST_IP;
-  const ifaces = os.networkInterfaces();
-  const preferred = ['en0', 'wlan0', 'en1', 'eth0'];
-  const candidates = [];
-  for (const [name, addrs] of Object.entries(ifaces)) {
-    for (const a of addrs ?? []) {
-      if (a.family === 'IPv4' && !a.internal) candidates.push({ name, address: a.address });
-    }
-  }
-  candidates.sort((a, b) => rank(a.name) - rank(b.name));
-  return candidates[0]?.address ?? 'localhost';
-
-  function rank(name) {
-    const i = preferred.indexOf(name);
-    return i === -1 ? preferred.length : i;
-  }
-}
-
-const HOST_IP = lanAddress();
-const JOIN_URL = `http://${HOST_IP}:${PORT}/`;
+// Phones join at http://<LAN address>:<port>/. The address is worked out per request (see
+// address.js), so reloading the TV after the Mac changes networks shows the right code.
+let port = PORT; // the port actually bound, once listening
+const joinUrlFor = (address) => `http://${address}:${port}/`;
 
 // ---------------------------------------------------------------------------
 // HTTP: static files + a tiny join-info API
@@ -73,8 +56,23 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
 
     if (url.pathname === '/api/join-info') {
-      const qrSvg = await QRCode.toString(JOIN_URL, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
-      return sendJson(res, { url: JOIN_URL, qrSvg, maxPlayers: MAX_PLAYERS, arena: ARENA, tickHz: TICK_HZ });
+      // ?ip= picks another of this machine's addresses (the TV's "Switch" control). Only real
+      // candidates are accepted, so the TV can never be made to show a code for some other host.
+      const { primary, candidates } = await joinAddresses();
+      const ip = url.searchParams.get('ip');
+      if (ip && !candidates.some((c) => c.address === ip)) return sendJson(res, { error: 'Not an address of this machine' }, 400);
+      const address = ip || primary;
+      const joinUrl = joinUrlFor(address);
+      const qrSvg = await QRCode.toString(joinUrl, { type: 'svg', margin: 1, color: { dark: '#000', light: '#fff' } });
+      return sendJson(res, {
+        url: joinUrl,
+        address,
+        qrSvg,
+        candidates: candidates.map((c) => ({ ...c, url: joinUrlFor(c.address) })),
+        maxPlayers: MAX_PLAYERS,
+        arena: ARENA,
+        tickHz: TICK_HZ,
+      });
     }
     if (url.pathname === '/api/logs') {
       // Recent log lines plus live numbers, for debugging from any browser on the Wi-Fi.
@@ -100,8 +98,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-function sendJson(res, obj) {
-  res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+function sendJson(res, obj, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
 
@@ -130,6 +128,9 @@ function notFound(res) {
 // Small, frequent messages: no compression (it costs CPU and adds delay). ws already turns off
 // Nagle's algorithm (TCP_NODELAY) on every socket, so a press is never held back to batch it.
 const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: false, maxPayload: 16 * 1024 });
+// ws re-emits the http server's errors (like EADDRINUSE while trying ports). Without a listener
+// that would throw as an "uncaught exception"; start() and the server's own handler report them.
+wss.on('error', () => {});
 const lobby = new Lobby();
 const session = new Session(lobby, (msg) => {
   // A phase change can swap the phone's screen; make sure every phone gets a fresh view after it.
@@ -483,18 +484,55 @@ setInterval(() => {
   }
 }, 5000);
 
-server.listen(PORT, '0.0.0.0', () => {
+function listenOn(p) {
+  return new Promise((resolve, reject) => {
+    const onError = (err) => {
+      server.off('listening', onListening);
+      reject(err);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(p, '0.0.0.0');
+  });
+}
+
+async function start() {
+  for (let i = 0; i < PORT_TRIES; i++) {
+    try {
+      await listenOn(PORT + i);
+      port = PORT + i;
+      break;
+    } catch (err) {
+      if (err.code === 'EADDRINUSE' && i < PORT_TRIES - 1) continue;
+      const why =
+        err.code !== 'EADDRINUSE' ? `can't listen on port ${PORT + i}: ${err.message}`
+        : PORT_SET ? `port ${PORT} is already in use (is Couchcade already running?). Close that or pick another, e.g. PORT=3100 npm start.`
+        : `ports ${PORT}-${PORT + PORT_TRIES - 1} are all in use (is Couchcade already running?). Close that or pick a port, e.g. PORT=3100 npm start.`;
+      log.error('server', why);
+      log.flushSync();
+      process.exit(1);
+    }
+  }
+  server.on('error', (err) => log.error('server', `server error: ${err.message}`, err));
+
+  const { primary } = await joinAddresses();
+  const joinUrl = joinUrlFor(primary);
   console.log('');
   console.log('  Couchcade server running');
-  console.log(`  TV screen:   http://localhost:${PORT}/tv`);
-  console.log(`  Phones join: ${JOIN_URL}`);
-  console.log(`  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more) · http://localhost:${PORT}/api/logs`);
+  console.log(`  TV screen:   http://localhost:${port}/tv`);
+  console.log(`  Phones join: ${joinUrl}`);
+  if (port !== PORT) console.log(`  Note:        port ${PORT} was busy, so this uses ${port}.`);
+  if (primary === 'localhost') console.log("  Warning:     no network address found, so phones can't join. Connect to Wi-Fi or set HOST_IP.");
+  console.log(`  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more) · http://localhost:${port}/api/logs`);
   console.log('');
-  log.info('server', `started on ${JOIN_URL} at ${TICK_HZ} ticks/s, node ${process.version}`);
-});
-
-server.on('error', (err) => {
-  log.error('server', `can't listen on port ${PORT}: ${err.message}`);
+  log.info('server', `started on ${joinUrl} at ${TICK_HZ} ticks/s, node ${process.version}`);
+}
+start().catch((err) => {
+  log.error('server', 'startup failed', err);
   log.flushSync();
   process.exit(1);
 });

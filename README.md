@@ -123,7 +123,8 @@ The server logs joins, leaves, reconnects, game starts and finishes, errors (wit
 ## Troubleshooting
 
 - **Phone can't load the page.** Make sure the phone is on the same Wi-Fi as the Mac (not a guest network) and check the macOS firewall setting for `node`.
-- **Wrong IP in the QR code.** Run `HOST_IP=192.168.1.50 npm run dev` with the Mac's actual Wi-Fi address.
+- **Wrong IP in the QR code.** Press **I** on the TV (or click "Wrong address? Switch" under the QR code) to cycle through the Mac's other addresses. If none work, run `HOST_IP=192.168.1.50 npm run dev` with the Mac's actual Wi-Fi address.
+- **Port 3000 is busy** (often an old Couchcade still running). It moves to the next free port up to 3010 and the startup banner says so; the QR code follows. `PORT=3100 npm start` picks one yourself.
 - **Something went wrong during a game.** Look at `logs/couchcade.log` (or `/api/logs`) for `WARN` and `ERROR` lines around that time. For lag, the `[stats]` lines show whether the server kept up (tick work, longest gap); press **L** on the TV to see whether it's the Wi-Fi.
 
 ## Milestones

@@ -2,7 +2,7 @@
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
 // Keys (Mac keyboard / later a keyboard on the Pi):
-//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game
+//   ↑/↓ pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game · I switch join address
 
 import { renderers } from './games/index.js';
 import audio from './audio.js';
@@ -15,6 +15,8 @@ const statusEl = $('status');
 let arena = { w: 1600, h: 900 };
 let phase = null; // latest {t:'phase', ...} message
 let joinUrl = '';
+let joinCandidates = []; // this machine's other addresses, for "Wrong address? Switch"
+let joinIndex = 0;
 
 // Snapshot buffer for interpolation: render ~1.5 ticks in the past and blend the two
 // snapshots around that moment, so updates look smooth at any frame rate. This delay is part
@@ -30,12 +32,33 @@ fetch('/api/join-info')
   .then((info) => {
     arena = info.arena;
     if (info.tickHz) renderDelayMs = 1.5 * (1000 / info.tickHz);
-    joinUrl = info.url.replace(/\/$/, '');
-    $('qr').innerHTML = info.qrSvg;
-    $('qrSmall').innerHTML = info.qrSvg;
-    $('url').textContent = joinUrl;
+    showJoin(info);
+    joinCandidates = info.candidates ?? [];
+    joinIndex = Math.max(0, joinCandidates.findIndex((c) => c.address === info.address));
+    $('switchIp').hidden = joinCandidates.length < 2;
     resize();
   });
+
+function showJoin(info) {
+  joinUrl = info.url.replace(/\/$/, '');
+  $('qr').innerHTML = info.qrSvg;
+  $('qrSmall').innerHTML = info.qrSvg;
+  $('url').textContent = joinUrl;
+}
+
+// A machine with VPNs, VMs or two networks can guess the wrong address for the QR code.
+// Cycle through the others; the server draws the code (and only for its own addresses).
+async function switchJoinAddress() {
+  if (joinCandidates.length < 2) return showToast('No other network addresses found (HOST_IP sets one)');
+  const i = (joinIndex + 1) % joinCandidates.length;
+  const c = joinCandidates[i];
+  const info = await fetch(`/api/join-info?ip=${encodeURIComponent(c.address)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!info) return showToast('Could not switch address; reload the page');
+  joinIndex = i;
+  showJoin(info);
+  showToast(`Join address ${i + 1}/${joinCandidates.length}: ${c.address} (${c.name})`);
+}
+$('switchIp').addEventListener('click', switchJoinAddress);
 
 // --- WebSocket -----------------------------------------------------------------
 let ws;
@@ -306,6 +329,7 @@ window.addEventListener('keydown', (e) => {
   if (key === 'n') showToast(audio.toggleNarrator() ? 'Narrator on' : 'Narrator off');
   if (key === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   if (key === 'j' && phase?.phase === 'playing') $('joinSmall').classList.toggle('show');
+  if (key === 'i' && !e.repeat) switchJoinAddress();
   if (!phase) return;
   if (phase.phase === 'lobby' && (key === 'arrowdown' || key === 'arrowup')) {
     const i = phase.games.findIndex((g) => g.id === phase.gameId);
