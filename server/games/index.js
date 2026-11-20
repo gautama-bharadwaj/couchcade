@@ -6,6 +6,8 @@
 // Server game contract:
 //   export default {
 //     id, title, description,
+//     category: 'action',   // picker tab: action | party | cards | extras, or any new word (shown capitalized)
+//     icon: '🚗',           // one emoji for the picker tile (optional; the first letter is used otherwise)
 //     minPlayers, maxPlayers,
 //     controller: { buttons: [{ id: 'a', label: 'Dash' }] },   // phone layout: joystick + up to 2 buttons (a, b)
 //              or { type: 'screens' },                          // phone shows the game's own screens (see below)
@@ -35,7 +37,8 @@
 //       locked: false,                     // true = shown but not tappable
 //     },
 //     hand: {                              // tappable playing cards; sends { key, value: card.id }
-//       key: 'play', cards: [{ id, label, color, small?, playable? }],  // playable:false = dimmed, not tappable
+//       key: 'play', cards: [{ id, label, color, small?, playable?, dim?, selected? }],
+//       // playable:false = dimmed, not tappable; dim:true = dimmed but still tappable; selected:true = raised
 //     },
 //     input: { key: 'msg', placeholder, maxLength, submitLabel },  // text box; sends { key, value: text }
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
@@ -48,15 +51,25 @@ import bumper from './bumper.js';
 import gala from './gala.js';
 import shed from './shed.js';
 import stickup from './stickup.js';
+import sumo from './sumo.js';
 import fuse from './fuse.js';
+import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, stickup, gala, shed, fuse, pillowfort, sandbox];
+export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
-/** What the TV and phones need to show a game picker. */
+/**
+ * What the TV and phones need to show a game picker. Games are grouped by category, in the order
+ * each category first appears in GAMES (so a new category needs no change here); a game without
+ * one goes under "Other". The order is the same on the TV and every phone, so arrow keys match.
+ */
 export function gameList() {
-  return GAMES.map(({ id, title, description, minPlayers, maxPlayers }) => ({ id, title, description, minPlayers, maxPlayers }));
+  const list = GAMES.map(({ id, title, description, icon, category, minPlayers, maxPlayers }) => ({
+    id, title, description, icon: icon ?? null, category: String(category || 'other').toLowerCase(), minPlayers, maxPlayers,
+  }));
+  const order = [...new Set(list.map((g) => g.category))];
+  return list.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category)); // stable sort
 }

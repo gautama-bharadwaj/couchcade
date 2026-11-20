@@ -73,7 +73,7 @@ Flags work with the downloads, `npx couchcade` and `npm start --`; `couchcade --
 2. The host picks a game on their phone and taps **Start**.
 3. When the game ends, everyone sees the results, then it goes back to the lobby.
 
-TV keyboard shortcuts: **↑/↓** pick a game, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one).
+TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one).
 
 ### Sound
 
@@ -81,7 +81,7 @@ The TV plays synthesized sound effects and a narrator using the browser's built-
 
 ### Playing with bots
 
-The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Fuse they peek before risky draws and love hiding Bombs on top for the next player; in Bumper Arena they chase and shove, in Stickup they grab weapons and fight; in Pillow Fort Siege they ferry cushions into a stepped fort, then lob pillows at the other teddy while one stays home to patch the walls; in Sandbox they stand still).
+The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Fuse they peek before risky draws and love hiding Bombs on top for the next player; in Bumper Arena they chase and shove, in Stickup they grab weapons and fight, in Sumo Spin they charge, lunge and sometimes dodge; in Hot Potato Pileup they chase with the bomb, flee, hop over tackles and shove each other toward it; in Pillow Fort Siege they ferry cushions into a stepped fort, then lob pillows at the other teddy while one stays home to patch the walls; in Sandbox they stand still).
 
 ### Testing without phones
 
@@ -93,6 +93,8 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 | --- | --- | --- |
 | **Bumper Arena** | Joystick + Dash | Shove others off a shrinking platform. Last one standing wins the round; first to 3 wins. One player = practice mode. |
 | **Stickup** | Joystick + Jump + Hit | Side-view stick-figure brawl for 2–8. 100 health each, headshots hurt more, and knockback grows as you get hurt. Weapons parachute in (bat, pistol, shotgun, grenades, railgun); walk into a crate bare-handed to grab one. Arenas rotate: Rooftops, Factory (moving platform, crushers) and Lava Pit (rising lava, crumbling ledges). Last one standing wins the round; first to 5. Push the stick down and jump to drop through thin ledges; aim with the stick. Sound effects only, no narrator. |
+| **Sumo Spin** | Joystick + Charge + Dodge | Push everyone off a round ring that spins (carrying you around, fastest at the edge) and tilts more and more toward a wandering low side. Hold Charge to brace and power up, let go to lunge. Dodge is a tiny sidestep that lets a lunge pass through you; dodge just before it lands for a perfect dodge, which sends the lunger stumbling and gives you a free full charge. The edge crumbles after 45 s. Last one on wins the round; first to 3, up to 8 players. One player = practice mode. |
+| **Hot Potato Pileup** | Joystick + Tackle + Dodge | Top-down brawl for 2–8 where someone always holds a ticking bomb. Tackle someone while you hold it to pass it (no instant tag-backs); Dodge is a hop that can't be tackled. The fuse is secret and keeps burning across passes; the blast knocks out the holder and flings everyone nearby. +1 per blast survived, +2 for the last one standing, most points after 3 rounds wins. Yards rotate: Backyard, Kitchen and a slippery Ice Rink. |
 | **Midnight Gala** | Phone screens | Hidden roles for 4–8. Secret Thieves steal gems at night; everyone picks rooms, compares alibis and evidence, and votes people out. Roles: Thief, Detective, Bodyguard (5+), Gossip (6+), Guest. |
 | **Fuse** | Phone screens | Push-your-luck card game for 2–8 in a fireworks workshop. Play cards from your hand, then draw from the crate; draw a Bomb and you're out unless you douse it with a Bucket (then secretly hide it back in the crate) or cut the right one of three wires (1 in 3). Decoys look like Bombs when you peek but just go pop. Cards: Bucket, Periscope (see top 3), Nudge (see the top card, bury it), Duck (skip your draw), Hot Potato (next player owes your draws + 1), Boomerang (send a Hot Potato back), Stir, Back Door (draw from the bottom), Swipe (steal a random card), X-Ray (see a hand). The TV shows the odds of a Bomb and a burning fuse as the turn timer. Last one standing wins. |
 | **Shed!** | Phone screens | Color-matching card game for 2–8. Your hand is on your phone; match the top card's color or number, use Skip / Reverse / Draw 2 / Wilds, stack +2s and +4s to pass the penalty along, and tap "Last card!" before someone catches you. 108-card deck, 7 each. |
@@ -127,6 +129,8 @@ server/
   arena.js            1600x900 logical canvas shared by all games
   games/index.js      game registry + the game contract (read this first)
   games/bumper.js
+  games/sumo.js
+  games/potato.js
   games/sandbox.js
 public/
   tv/tv.js            TV core: lobby/results screens, interpolation, render loop
@@ -140,7 +144,7 @@ scripts/
 
 ### Adding a game
 
-1. `server/games/<id>.js`: export `{ id, title, description, minPlayers, maxPlayers, controller, create }`. The contract is documented at the top of `server/games/index.js`.
+1. `server/games/<id>.js`: export `{ id, title, description, category, icon, minPlayers, maxPlayers, controller, create }`. `category` (such as `action`, `party` or `cards`) puts the game under that tab in the phone's game picker, and `icon` is one emoji for its tile on the TV and phone. The contract is documented at the top of `server/games/index.js`.
 2. `public/tv/games/<id>.js`: export `{ draw(ctx, { prev, cur, alpha, arena, now }) }`, and optionally `onSnapshot(prev, cur, audio)` for sound effects and narration (see `public/tv/audio.js`).
 3. Register it in `server/games/index.js` and `public/tv/games/index.js`.
 
@@ -222,6 +226,7 @@ To build only for the machine you're on: `npm run build:release` (needs Node 25.
 - [x] Shed! (color-matching card game)
 - [x] Fuse (push-your-luck bomb card game)
 - [x] Stickup (stick-figure brawler; tune weapons and arenas on real phones)
+- [x] Hot Potato Pileup (bomb-passing brawl; tune fuse and tackle range on real phones)
 - [x] Pillow Fort Siege (team fort building and pillow siege; tune timings on real phones)
 - [ ] M4 Polish: sounds, keep phones awake, Draw & Guess
 - [x] M5 Portable: any OS with a browser; downloads for macOS, Windows and Linux, `npx`, Docker; smarter QR address
