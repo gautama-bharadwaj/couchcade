@@ -1,0 +1,44 @@
+# npm run check on every pull request, on all three desktop OSes, with the oldest Node that
+# package.json allows and the one the downloads embed. Plus a Linux release build, so a change
+# that breaks packaging shows up here rather than on release day.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }}, Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['20', '26']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  release-build:
+    name: Release build (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26.13.1' # keep in step with release.yml
+          cache: npm
+      - run: npm ci
+      - run: npm run build:release
+      - run: node scripts/smoke.mjs --cmd dist/release/couchcade-linux-x64
