@@ -1,5 +1,6 @@
 import http from 'node:http';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
@@ -7,11 +8,19 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { log } from './log.js';
 import { joinAddresses } from './address.js';
+import { PACKAGED, openBrowser } from './runtime.js';
 import { Lobby, MAX_PLAYERS } from './lobby.js';
 import { Session } from './session.js';
 import { ARENA } from './arena.js';
 
+// PORT set: use exactly that port (and stop if it's busy). Not set: 3000, or if another app
+// already has it, the first free one of 3001-3010, so a double-click never just fails.
+const PORT_SET = Boolean(process.env.PORT);
 const PORT = Number(process.env.PORT) || 3000;
+const PORT_TRIES = PORT_SET ? 1 : 11;
+// The downloads open the TV page themselves (nobody reads a terminal after a double-click).
+// From source only with --open / OPEN_BROWSER=1, so npm run dev doesn't pop a tab per restart.
+const OPEN_BROWSER = process.env.OPEN_BROWSER === '1' || (PACKAGED && process.env.OPEN_BROWSER !== '0');
 // 60 ticks a second: an input waits at most ~17 ms for the next tick (it was ~33 ms at 30).
 // TICK_HZ=30 npm start halves the CPU work if a small machine struggles.
 const TICK_HZ = Number(process.env.TICK_HZ) || 60;
@@ -127,6 +136,9 @@ function notFound(res) {
 // Small, frequent messages: no compression (it costs CPU and adds delay). ws already turns off
 // Nagle's algorithm (TCP_NODELAY) on every socket, so a press is never held back to batch it.
 const wss = new WebSocketServer({ server, path: '/ws', perMessageDeflate: false, maxPayload: 16 * 1024 });
+// ws re-emits the http server's errors (like EADDRINUSE while trying ports). Without a listener
+// that would throw; start() and the server's own handler below already report them.
+wss.on('error', () => {});
 const lobby = new Lobby();
 const session = new Session(lobby, (msg) => {
   // A phase change can swap the phone's screen; make sure every phone gets a fresh view after it.
@@ -480,26 +492,83 @@ setInterval(() => {
   }
 }, 5000);
 
-async function start() {
-  const { primary } = await joinAddresses();
-  server.listen(PORT, '0.0.0.0', () => {
-    const joinUrl = joinUrlFor(primary);
-    console.log('');
-    console.log('  Couchcade server running');
-    console.log(`  TV screen:   http://localhost:${port}/tv`);
-    console.log(`  Phones join: ${joinUrl}`);
-    console.log(`  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more) · http://localhost:${port}/api/logs`);
-    console.log('');
-    log.info('server', `started on ${joinUrl} at ${TICK_HZ} ticks/s, node ${process.version}`);
+function listenOn(p) {
+  return new Promise((resolve, reject) => {
+    const onError = (err) => {
+      server.off('listening', onListening);
+      reject(err);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(p, '0.0.0.0');
   });
 }
-start();
 
-server.on('error', (err) => {
-  log.error('server', `can't listen on port ${PORT}: ${err.message}`);
-  log.flushSync();
-  process.exit(1);
+async function start() {
+  const { primary } = await joinAddresses();
+  for (let i = 0; i < PORT_TRIES; i++) {
+    try {
+      await listenOn(PORT + i);
+      port = PORT + i;
+      break;
+    } catch (err) {
+      if (err.code === 'EADDRINUSE' && i < PORT_TRIES - 1) continue;
+      const why =
+        err.code !== 'EADDRINUSE' ? `can't listen on port ${PORT + i}: ${err.message}`
+        : PORT_SET ? `port ${PORT} is already in use (is Couchcade already running?). Close that or pick another port, e.g. --port 3100.`
+        : `ports ${PORT}-${PORT + PORT_TRIES - 1} are all in use (is Couchcade already running?). Close that or pick a port, e.g. --port 3100.`;
+      log.error('server', why);
+      return exitAfterStartupError();
+    }
+  }
+  server.on('error', (err) => {
+    log.error('server', `server error: ${err.message}`, err);
+  });
+
+  const joinUrl = joinUrlFor(primary);
+  const tvUrl = `http://localhost:${port}/tv`;
+  const lines = [
+    '',
+    '  Couchcade is running',
+    '',
+    `  TV screen:   ${tvUrl}${OPEN_BROWSER ? '   (opening it in your browser)' : ''}`,
+    '               Open it on the computer connected to the TV, then press F for full screen.',
+    `  Phones join: ${joinUrl}   (scan the QR code on the TV)`,
+  ];
+  if (port !== PORT) lines.push(`  Note:        port ${PORT} was busy, so this uses ${port}.`);
+  if (primary === 'localhost') lines.push("  Warning:     no network address found, so phones can't join. Connect to Wi-Fi or set HOST_IP.");
+  else if (!process.env.HOST_IP && existsSync('/.dockerenv')) {
+    lines.push("  Warning:     in Docker the container's own address isn't reachable from phones.");
+    lines.push('               Set HOST_IP to this computer\'s LAN address, or use --network host (Linux).');
+  }
+  lines.push(
+    `  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more)${LOG_API_OFF ? '' : ` · http://localhost:${port}/api/logs`}`,
+    '  Quit:        press Ctrl+C, or close this window.',
+    '',
+  );
+  console.log(lines.join('\n'));
+  log.info('server', `started on ${joinUrl} at ${TICK_HZ} ticks/s, node ${process.version}${PACKAGED ? ' (packaged)' : ''}`);
+  if (OPEN_BROWSER) openBrowser(tvUrl);
+}
+start().catch((err) => {
+  log.error('server', 'startup failed', err);
+  exitAfterStartupError();
 });
+
+function exitAfterStartupError() {
+  log.flushSync();
+  // A double-clicked .exe closes its console window on exit, taking the reason with it.
+  if (PACKAGED && process.stdin.isTTY) {
+    console.log('\n  Press Enter to close this window.');
+    process.stdin.once('data', () => process.exit(1));
+    return;
+  }
+  process.exit(1);
+}
 
 process.on('uncaughtException', (err) => {
   log.error('server', 'uncaught exception; stopping', err);
