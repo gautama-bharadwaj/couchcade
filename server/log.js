@@ -1,7 +1,16 @@
 // Logging that stays out of the game's way.
 //
 //   LOG_LEVEL=info npm run dev     error | warn | info (default) | debug | trace
-//   LOG_FILE=off                   don't write logs/couchcade.log (default: write it)
+//   LOG_FILE=off                   don't write a log file (default: write one, see below)
+//   LOG_FILE=/some/path.log        write it there instead
+//
+// Where the file goes by default:
+//   - From source (npm run dev): logs/couchcade.log in the project folder, as always.
+//   - The downloadable apps, and npx / npm installs: the app folder may be read-only, inside
+//     an app bundle or deep in npm's cache, so the per-user log folder of the OS:
+//       macOS    ~/Library/Logs/Couchcade/couchcade.log
+//       Windows  %LOCALAPPDATA%\Couchcade\logs\couchcade.log
+//       Linux    ${XDG_STATE_HOME:-~/.local/state}/couchcade/couchcade.log
 //
 // Cheap by design:
 //   - A call below the current level returns at once. Hot paths guard with `if (log.debugOn)` so
@@ -17,7 +26,9 @@
 
 import { appendFileSync, createWriteStream, mkdirSync, renameSync, statSync, writeSync } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { PACKAGED } from './runtime.js';
 
 const LEVELS = { error: 0, warn: 1, info: 2, debug: 3, trace: 4 };
 const NAMES = ['ERROR', 'WARN ', 'INFO ', 'DEBUG', 'TRACE'];
@@ -29,7 +40,21 @@ const ROTATE_BYTES = 5 * 1024 * 1024;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const envLevel = String(process.env.LOG_LEVEL ?? 'info').toLowerCase();
 const level = LEVELS[envLevel] ?? LEVELS.info;
-const filePath = process.env.LOG_FILE === 'off' ? null : path.resolve(ROOT, process.env.LOG_FILE || 'logs/couchcade.log');
+const INSTALLED = PACKAGED || ROOT.split(path.sep).includes('node_modules');
+const filePath =
+  process.env.LOG_FILE === 'off' ? null
+  : process.env.LOG_FILE ? path.resolve(INSTALLED ? process.cwd() : ROOT, process.env.LOG_FILE)
+  : INSTALLED ? userLogFile()
+  : path.join(ROOT, 'logs', 'couchcade.log');
+
+function userLogFile() {
+  const home = os.homedir();
+  if (process.platform === 'darwin') return path.join(home, 'Library', 'Logs', 'Couchcade', 'couchcade.log');
+  if (process.platform === 'win32') {
+    return path.join(process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local'), 'Couchcade', 'logs', 'couchcade.log');
+  }
+  return path.join(process.env.XDG_STATE_HOME || path.join(home, '.local', 'state'), 'couchcade', 'couchcade.log');
+}
 
 let pending = [];
 let flushTimer = null;
