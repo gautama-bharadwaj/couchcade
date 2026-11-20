@@ -321,6 +321,15 @@ function showToast(text) {
 }
 
 // --- Keys --------------------------------------------------------------------------
+// Show the mouse pointer while it moves (to click or scroll on a laptop), hide it after 2.5 s still.
+let pointerTimer = 0;
+document.body.classList.add('idle');
+window.addEventListener('mousemove', () => {
+  document.body.classList.remove('idle');
+  clearTimeout(pointerTimer);
+  pointerTimer = setTimeout(() => document.body.classList.add('idle'), 2500);
+});
+
 window.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
   unlockSound();
