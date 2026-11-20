@@ -9,8 +9,9 @@ import bumper from './bumper.js';
 import gala from './gala.js';
 import shed from './shed.js';
 import stickup from './stickup.js';
+import sumo from './sumo.js';
 import fuse from './fuse.js';
 import potato from './potato.js';
 import sandbox from './sandbox.js';
 
-export const renderers = { bumper, stickup, gala, shed, fuse, potato, sandbox };
+export const renderers = { bumper, stickup, sumo, gala, shed, fuse, potato, sandbox };

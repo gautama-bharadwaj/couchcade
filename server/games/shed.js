@@ -30,7 +30,9 @@ const CATCH_GRACE_S = 3; // time to say "Last card!" before anyone can catch you
 export default {
   id: 'shed',
   title: 'Shed!',
-  description: 'Match colors and numbers, empty your hand first. 2–8 players.',
+  category: 'cards',
+  icon: '🃏',
+  description: 'Match colors and numbers, empty your hand first.',
   minPlayers: 2,
   maxPlayers: 8,
   controller: { type: 'screens' },
