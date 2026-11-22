@@ -13,6 +13,7 @@ import sumo from './sumo.js';
 import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
+import tint from './tint.js';
 import sandbox from './sandbox.js';
 
-export const renderers = { bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, sandbox };
+export const renderers = { bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, sandbox };

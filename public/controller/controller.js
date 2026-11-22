@@ -255,6 +255,12 @@ function renderScreen(screen) {
     if (screen.tag.color) t.style.background = screen.tag.color;
     wrap.append(t);
   }
+  if (screen.swatch) {
+    const sw = el('div', 'swatch');
+    sw.style.background = screen.swatch.color;
+    if (screen.swatch.label) sw.append(el('span', '', screen.swatch.label));
+    wrap.append(sw);
+  }
   for (const line of screen.lines ?? []) wrap.append(el('p', '', line));
 
   if (screen.cards?.length) {
@@ -322,6 +328,9 @@ function renderScreen(screen) {
     wrap.append(row);
   }
 
+  if (screen.wheel) wrap.append(buildWheel(screen.wheel, el));
+  else wheelNudge = null;
+
   if (screen.actions?.length) {
     const acts = el('div', 'acts');
     for (const a of screen.actions) {
@@ -332,6 +341,135 @@ function renderScreen(screen) {
     }
     wrap.append(acts);
   }
+}
+
+// Color wheel (see "wheel" in server/games/index.js): rings from the middle out, hue spokes
+// clockwise from the top. Tap a swatch or nudge with the buttons / arrow keys; the pick is drawn
+// at once and sent to the server, which echoes it back as `selected`.
+let wheelNudge = null; // (dHue, dRing) for the arrow keys, while a wheel can be picked from
+function buildWheel(w, el) {
+  const { key, hues, rings, colors, pins = [], target = null, first = null, locked = false, small = false } = w;
+  let sel = w.selected ?? null;
+  const box = el('div', 'wheel');
+  const canvas = el('canvas');
+  const size = Math.min(small ? 200 : 380, (document.getElementById('screenBody').clientWidth || 340) - 4);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.height = Math.round(size * dpr);
+  canvas.style.width = canvas.style.height = `${size}px`;
+  const R = size / 2 - 3;
+  const r0 = R * 0.24;
+  const band = (R - r0) / rings;
+  const step = (Math.PI * 2) / hues;
+  const angleOf = (h) => -Math.PI / 2 + h * step; // centre of a spoke
+  const centre = (c) => {
+    const h = c % hues;
+    const r = Math.floor(c / hues);
+    const rad = r0 + band * (r + 0.5);
+    return [size / 2 + Math.cos(angleOf(h)) * rad, size / 2 + Math.sin(angleOf(h)) * rad];
+  };
+  const g = canvas.getContext('2d');
+
+  function cellPath(c) {
+    const h = c % hues;
+    const r = Math.floor(c / hues);
+    const a0 = angleOf(h) - step / 2;
+    const a1 = angleOf(h) + step / 2;
+    g.beginPath();
+    g.arc(size / 2, size / 2, r0 + band * (r + 1), a0, a1);
+    g.arc(size / 2, size / 2, r0 + band * r, a1, a0, true);
+    g.closePath();
+  }
+
+  function draw() {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, size, size);
+    for (let c = 0; c < hues * rings; c++) {
+      cellPath(c);
+      g.fillStyle = colors[c];
+      g.fill();
+      g.lineWidth = 1;
+      g.strokeStyle = '#0d0f14';
+      g.stroke();
+    }
+    // The middle previews the swatch you picked (or the secret one), big enough to judge.
+    const preview = sel ?? target;
+    g.beginPath();
+    g.arc(size / 2, size / 2, r0 - 4, 0, Math.PI * 2);
+    g.fillStyle = preview != null ? colors[preview] : '#141824';
+    g.fill();
+    if (preview == null) {
+      g.fillStyle = '#8a93a8';
+      g.font = `800 ${Math.round(r0 * 0.5)}px system-ui, sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('?', size / 2, size / 2);
+    }
+    if (first != null && first !== sel) ring(first, '#f2f4f8', [4, 3]);
+    for (const p of pins) {
+      const [x, y] = centre(p.cell);
+      g.beginPath();
+      g.arc(x, y, Math.max(4, band * 0.28), 0, Math.PI * 2);
+      g.fillStyle = p.color;
+      g.fill();
+      g.lineWidth = 2;
+      g.strokeStyle = '#fff';
+      g.stroke();
+    }
+    if (target != null) ring(target, '#fff', null, 4, '#0d0f14');
+    if (sel != null) ring(sel, '#fff', null, 4, '#0d0f14');
+  }
+  function ring(c, color, dash, width = 3, under) {
+    if (under) {
+      cellPath(c);
+      g.lineWidth = width + 3;
+      g.strokeStyle = under;
+      g.stroke();
+    }
+    cellPath(c);
+    g.setLineDash(dash ?? []);
+    g.lineWidth = width;
+    g.strokeStyle = color;
+    g.stroke();
+    g.setLineDash([]);
+  }
+
+  function choose(c) {
+    if (c == null || c === sel) return;
+    sel = c;
+    draw();
+    act(key, String(c));
+  }
+  if (!locked) {
+    canvas.addEventListener('pointerdown', (e) => {
+      const b = canvas.getBoundingClientRect();
+      const x = e.clientX - b.left - size / 2;
+      const y = e.clientY - b.top - size / 2;
+      const d = Math.hypot(x, y);
+      if (d < r0 || d > R + 6) return;
+      const r = Math.min(rings - 1, Math.floor((d - r0) / band));
+      const h = Math.round((Math.atan2(y, x) + Math.PI / 2) / step + hues) % hues;
+      choose(r * hues + h);
+    });
+    wheelNudge = (dh, dr) => {
+      if (sel == null) return choose(Math.floor(rings / 2) * hues);
+      const h = (((sel % hues) + dh) % hues + hues) % hues;
+      const r = Math.max(0, Math.min(rings - 1, Math.floor(sel / hues) + dr));
+      choose(r * hues + h);
+    };
+  } else wheelNudge = null;
+
+  draw();
+  box.append(canvas);
+  if (!locked) {
+    const nudges = el('div', 'nudges');
+    for (const [label, dh, dr] of [['⟲', -1, 0], ['Lighter', 0, -1], ['Darker', 0, 1], ['⟳', 1, 0]]) {
+      const b = el('button', 'secondaryBtn', label);
+      b.addEventListener('click', () => wheelNudge?.(dh, dr));
+      nudges.append(b);
+    }
+    box.append(nudges);
+  }
+  return box;
 }
 
 function act(key, value) {
@@ -432,7 +570,13 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 
 // --- Keyboard (desktop testing) -----------------------------------------------------
 window.addEventListener('keydown', (e) => {
-  if (document.activeElement?.tagName === 'INPUT' || e.repeat) return;
+  if (document.activeElement?.tagName === 'INPUT') return;
+  const nudge = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.code];
+  if (nudge && wheelNudge && phase?.controller?.type === 'screens') {
+    e.preventDefault();
+    return wheelNudge(...nudge);
+  }
+  if (e.repeat) return;
   keys.add(e.code);
   sendInput();
 });

@@ -109,6 +109,12 @@
     #screen .acts { display: grid; gap: 8px; }
     #screen .secondaryBtn { font-size: 1.1rem; font-weight: 700; padding: 12px 20px; border-radius: 14px; border: 1px solid var(--line); background: transparent; color: inherit; }
     #screen button:disabled { opacity: .4; }
+    #screen .swatch { height: 72px; border-radius: 14px; display: flex; align-items: flex-end; padding: 8px 12px; box-shadow: inset 0 0 0 2px rgba(255,255,255,.25); }
+    #screen .swatch span { font-weight: 800; font-size: .85rem; padding: 2px 8px; border-radius: 999px; background: rgba(13,15,20,.7); }
+    #screen .wheel { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    #screen .wheel canvas { touch-action: none; }
+    #screen .nudges { display: grid; grid-template-columns: 1fr 1.6fr 1.6fr 1fr; gap: 6px; width: 100%; max-width: 380px; }
+    #screen .nudges button { padding: 10px 6px; font-size: 1rem; }
     #screenFooter { min-height: 1.2em; }
     body.screens #hud { display: flex; }
 
