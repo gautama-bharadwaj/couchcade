@@ -3,6 +3,10 @@
 // Hands and peeks stay on the phones. Rules are in server/games/fuse.js.
 
 import { circle, text } from './util.js';
+import { bombIcon, cardBack, drawFace, drawNamed, spark } from '../../art/fuse.js';
+
+// Card faces come from the shared art module (the phones draw the same ones).
+const cardFace = (ctx, kind, x, y, scale, now, wet = false) => drawFace(ctx, kind, x, y, 150 * scale, 214 * scale, now, { wet });
 
 // short: the card legend on the left. text: the caption under the pile when someone plays it.
 const CARD = {
@@ -38,6 +42,7 @@ let banner = null; // { text, color, at, dur, size }
 let boomAt = -1e9;
 let pileBumpAt = 0;
 let embers = [];
+let rings = []; // shockwaves: { x, y, at, color, size }
 let played = null; // { kind, by, color, at } the last card played, for the caption and legend glow
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -85,6 +90,7 @@ function onEvent(s, e, now) {
       burst(800, 420, 70, { colors: ['#38b6ff', '#8fd3ff', '#ffffff'], speed: [200, 650], gravity: 900, life: [0.6, 1.2], size: [4, 9] });
       burst(800, 420, 18, { colors: ['#d8e2ee'], speed: [20, 100], gravity: -80, size: [20, 40], life: [1, 2], kind: 'smoke' });
       banner = { text: 'Doused!', color: '#38b6ff', at: now, dur: 1400, size: 72 };
+      rings.push({ x: 800, y: 420, at: now, color: '#8fd3ff', size: 380, dur: 600 });
       break;
     case 'hide':
       flights.push({ kind: 'bomb', face: true, from: { x: 800, y: 420 }, to: DECK, at: now, dur: 500 });
@@ -92,6 +98,7 @@ function onEvent(s, e, now) {
     case 'defused':
       burst(800, 420, 40, { colors: ['#3ddc84', '#ffd23f', '#ffffff'], speed: [150, 480], life: [0.6, 1.3], kind: 'confetti' });
       banner = { text: 'PHEW! Defused', color: '#3ddc84', at: now, dur: 2000, size: 76 };
+      rings.push({ x: 800, y: 470, at: now, color: '#3ddc84', size: 420, dur: 700 });
       break;
     case 'boom': {
       const at = by ?? { x: 800, y: 420 };
@@ -103,6 +110,8 @@ function onEvent(s, e, now) {
       burst(at.x, at.y, 30, { colors: ['#ff9f1c', '#ffd23f'], speed: [100, 400], life: [0.4, 0.9] });
       burst(at.x, at.y, 12, { colors: ['#4a4450'], speed: [10, 60], gravity: -50, size: [18, 34], life: [1.5, 3], kind: 'smoke' });
       banner = { text: 'KABOOM!', sub: `${name} is out`, color: '#ffd23f', at: now, dur: 2400, size: 150 };
+      rings.push({ x: 800, y: 420, at: now, color: '#fff0c8', size: 1100, dur: 650 });
+      rings.push({ x: 800, y: 420, at: now + 120, color: '#ff9f1c', size: 800, dur: 800 });
       break;
     }
   }
@@ -246,6 +255,7 @@ export default {
 
     drawFlights(ctx, now);
     overlay(ctx, s, W, H, now);
+    drawRings(ctx, now);
     drawParts(ctx, dt);
 
     // Banner text over everything.
@@ -648,27 +658,6 @@ function background(ctx, W, H, risk, now, dt) {
   ctx.globalAlpha = 1;
 }
 
-function spark(ctx, x, y, now, size) {
-  const r = (6 + 3 * Math.sin(now / 40)) * size;
-  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 3);
-  g.addColorStop(0, 'rgba(255,255,220,1)');
-  g.addColorStop(0.3, 'rgba(255,200,80,.8)');
-  g.addColorStop(1, 'rgba(255,120,40,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(x, y, r * 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#ffe9a8';
-  ctx.lineWidth = 2 * size;
-  for (let i = 0; i < 6; i++) {
-    const a = now / 90 + i * 1.05 + Math.sin(now / 37 + i);
-    const l = r * (1.5 + Math.random());
-    ctx.beginPath();
-    ctx.moveTo(x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r * 0.6);
-    ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
-    ctx.stroke();
-  }
-}
 
 // The turn timer is a fuse burning from right to left along the top.
 function timerFuse(ctx, s, now, dt) {
@@ -718,39 +707,6 @@ function crate(ctx, s, now) {
   text(ctx, 'THE CRATE', x, y - 130 - layers * 3, { size: 18, weight: 900, color: '#8a7a6a' });
 }
 
-function cardBack(ctx, x, y, scale) {
-  const w = 150 * scale;
-  const h = 214 * scale;
-  ctx.save();
-  ctx.translate(x, y);
-  roundRect(ctx, -w / 2, -h / 2, w, h, 14 * scale);
-  ctx.fillStyle = '#7a3b1e';
-  ctx.fill();
-  ctx.lineWidth = 6 * scale;
-  ctx.strokeStyle = '#ffd9a0';
-  ctx.stroke();
-  // Wooden crate slats.
-  ctx.strokeStyle = 'rgba(0,0,0,.25)';
-  ctx.lineWidth = 3 * scale;
-  for (let i = -2; i <= 2; i++) {
-    ctx.beginPath();
-    ctx.moveTo(-w / 2 + 8 * scale, (i * h) / 6);
-    ctx.lineTo(w / 2 - 8 * scale, (i * h) / 6);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = 'rgba(255,217,160,.35)';
-  ctx.lineWidth = 8 * scale;
-  ctx.beginPath();
-  ctx.moveTo(-w / 2 + 16 * scale, -h / 2 + 16 * scale);
-  ctx.lineTo(w / 2 - 16 * scale, h / 2 - 16 * scale);
-  ctx.stroke();
-  ctx.rotate(-0.25);
-  ctx.fillStyle = '#1a0f12';
-  roundRect(ctx, -54 * scale, -22 * scale, 108 * scale, 44 * scale, 6 * scale);
-  ctx.fill();
-  text(ctx, 'FUSE', 0, 13 * scale, { size: 34 * scale, weight: 900, color: '#ffb35c' });
-  ctx.restore();
-}
 
 function pile(ctx, s, now) {
   const { x, y } = PILE;
@@ -783,10 +739,8 @@ function legend(ctx, now) {
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    ctx.fillStyle = c.color;
-    roundRect(ctx, x, y + 4, 12, 16, 3);
-    ctx.fill();
-    text(ctx, c.name, x + 22, y + 19, { size: 17, weight: 800, align: 'left', color: c.color });
+    drawNamed(ctx, k, x + 8, y + 12, 24);
+    text(ctx, c.name, x + 26, y + 19, { size: 17, weight: 800, align: 'left', color: c.color });
     text(ctx, c.short, x + 132, y + 19, { size: 16, weight: 500, align: 'left', color: glow > 0 ? '#ffe8c2' : '#a8998a' });
   });
 }
@@ -974,260 +928,8 @@ function wires(ctx, cx, cy, cut, now) {
   });
 }
 
-function bombIcon(ctx, x, y, scale, now, lit, wet = false) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  const g = ctx.createRadialGradient(-14, -14, 4, 0, 0, 46);
-  g.addColorStop(0, wet ? '#5a6878' : '#4a4450');
-  g.addColorStop(1, '#0e0a10');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(0, 0, 44, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#2a2328';
-  ctx.fillRect(-12, -56, 24, 16);
-  ctx.strokeStyle = '#c98d55';
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(0, -56);
-  ctx.quadraticCurveTo(10, -78, 26, -74);
-  ctx.stroke();
-  circle(ctx, -16, -16, 9, 'rgba(255,255,255,.25)');
-  ctx.restore();
-  if (lit) spark(ctx, x + 26 * scale, y - 74 * scale, now, scale * 0.8);
-  if (wet) for (let i = 0; i < 3; i++) circle(ctx, x - 30 + i * 30, y + 60 * scale + ((now / 8 + i * 40) % 60), 5, '#38b6ff');
-}
 
-// Card faces: a dark card with a colored band, the name, and a vector icon.
-function cardFace(ctx, kind, x, y, scale, now, wet = false) {
-  const c = CARD[kind] ?? CARD.bomb;
-  const w = 150 * scale;
-  const h = 214 * scale;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  roundRect(ctx, -75, -107, 150, 214, 14);
-  ctx.fillStyle = '#1b1520';
-  ctx.fill();
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = c.color;
-  ctx.stroke();
-  ctx.save();
-  roundRect(ctx, -75, -107, 150, 214, 14);
-  ctx.clip();
-  ctx.fillStyle = c.color;
-  ctx.fillRect(-75, 62, 150, 50);
-  // Halftone dots behind the icon.
-  for (let gx = -66; gx < 70; gx += 14) for (let gy = -98; gy < 60; gy += 14) circle(ctx, gx + (Math.round(gy / 14) & 1) * 7, gy, 3, c.color + "22");
-  ctx.restore();
-  icon(ctx, kind, 0, -18, now, wet);
-  text(ctx, c.name.toUpperCase(), 0, 93, { size: c.name.length > 8 ? 17 : 21, weight: 900, color: '#1a0f12' });
-  ctx.restore();
-  void w;
-  void h;
-}
 
-function icon(ctx, kind, x, y, now, wet = false) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  const W = '#ffe8c2';
-  switch (kind) {
-    case 'bomb':
-    case 'decoy':
-      ctx.restore();
-      bombIcon(ctx, x + 0, y + 12, 0.85, now, kind === 'bomb' && !wet, wet);
-      if (kind === 'decoy') {
-        ctx.fillStyle = '#ff6fd8';
-        ctx.fillRect(x + 10, y - 60, 46, 26);
-        text(ctx, 'POP', x + 33, y - 41, { size: 16, weight: 900, color: '#1a0f12' });
-      }
-      return;
-    case 'bucket':
-      ctx.fillStyle = '#38b6ff';
-      ctx.beginPath();
-      ctx.moveTo(-38, -20);
-      ctx.lineTo(38, -20);
-      ctx.lineTo(28, 40);
-      ctx.lineTo(-28, 40);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = W;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(0, -20, 38, Math.PI, 0);
-      ctx.stroke();
-      ctx.fillStyle = '#8fd3ff';
-      ctx.fillRect(-38, -24, 76, 8);
-      for (const [dx, dy] of [[-48, -44], [50, -36], [44, -60]]) {
-        ctx.beginPath();
-        ctx.arc(dx, dy, 6, 0, Math.PI);
-        ctx.lineTo(dx, dy - 12);
-        ctx.closePath();
-        ctx.fill();
-      }
-      break;
-    case 'scope':
-      ctx.strokeStyle = '#a77bff';
-      ctx.lineWidth = 18;
-      ctx.beginPath();
-      ctx.moveTo(-20, 48);
-      ctx.lineTo(-20, -30);
-      ctx.lineTo(28, -30);
-      ctx.stroke();
-      circle(ctx, 38, -30, 16, W);
-      circle(ctx, 38, -30, 9, '#3a2a60');
-      circle(ctx, 34, -34, 3, '#fff');
-      break;
-    case 'nudge':
-      for (let i = 0; i < 3; i++) {
-        roundRect(ctx, -30 + i * 4, -40 + i * 16, 60, 34, 6);
-        ctx.fillStyle = i === 0 ? '#c48bff' : '#4a3a5a';
-        ctx.fill();
-      }
-      ctx.strokeStyle = W;
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.moveTo(42, -24);
-      ctx.quadraticCurveTo(66, 10, 44, 50);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(32, 40);
-      ctx.lineTo(44, 52);
-      ctx.lineTo(56, 38);
-      ctx.stroke();
-      break;
-    case 'duck': {
-      ctx.fillStyle = '#ffd23f';
-      ctx.beginPath();
-      ctx.ellipse(0, 22, 42, 26, 0, 0, Math.PI * 2);
-      ctx.fill();
-      circle(ctx, 20, -16, 22, '#ffd23f');
-      ctx.fillStyle = '#ff9f1c';
-      ctx.beginPath();
-      ctx.moveTo(38, -16);
-      ctx.lineTo(60, -10);
-      ctx.lineTo(38, -4);
-      ctx.fill();
-      circle(ctx, 26, -22, 4, '#1a0f12');
-      ctx.strokeStyle = '#e0b020';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(-6, 18, 16, 0.2, 2.2);
-      ctx.stroke();
-      break;
-    }
-    case 'potato': {
-      const flick = Math.sin(now / 80) * 4;
-      ctx.fillStyle = '#ff4d3d';
-      ctx.beginPath();
-      ctx.moveTo(-20, -18);
-      ctx.quadraticCurveTo(-26, -50, -6, -62 + flick);
-      ctx.quadraticCurveTo(0, -40, 8, -54 - flick);
-      ctx.quadraticCurveTo(26, -34, 20, -18);
-      ctx.fill();
-      ctx.fillStyle = '#ffd23f';
-      ctx.beginPath();
-      ctx.moveTo(-10, -18);
-      ctx.quadraticCurveTo(-10, -40, 0, -46 + flick);
-      ctx.quadraticCurveTo(12, -34, 10, -18);
-      ctx.fill();
-      ctx.fillStyle = '#c98d55';
-      ctx.beginPath();
-      ctx.ellipse(0, 14, 46, 32, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-      for (const [dx, dy] of [[-18, 6], [10, 22], [20, 0], [-4, 30]]) circle(ctx, dx, dy, 3.5, '#7a4b2a');
-      break;
-    }
-    case 'boomerang':
-      ctx.strokeStyle = '#ffd23f';
-      ctx.lineWidth = 20;
-      ctx.beginPath();
-      ctx.moveTo(-44, 30);
-      ctx.quadraticCurveTo(0, -60, 44, 30);
-      ctx.stroke();
-      ctx.strokeStyle = '#ff9f1c';
-      ctx.lineWidth = 4;
-      ctx.setLineDash([6, 8]);
-      ctx.beginPath();
-      ctx.arc(0, 20, 58, Math.PI * 0.15, Math.PI * 0.85);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      break;
-    case 'stir':
-      ctx.strokeStyle = '#2ee6d6';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      for (let a = 0; a < Math.PI * 5; a += 0.15) {
-        const r = 4 + a * 3.2;
-        const t = a + now / 400;
-        ctx.lineTo(Math.cos(t) * r, Math.sin(t) * r);
-      }
-      ctx.stroke();
-      break;
-    case 'backdoor':
-      ctx.fillStyle = '#7bd389';
-      roundRect(ctx, -30, -50, 60, 96, 6);
-      ctx.fill();
-      ctx.fillStyle = '#3a6a44';
-      ctx.fillRect(-22, -42, 44, 36);
-      ctx.fillRect(-22, 0, 44, 38);
-      circle(ctx, 18, 0, 5, '#ffd23f');
-      ctx.strokeStyle = W;
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.moveTo(-56, 30);
-      ctx.lineTo(-56, 56);
-      ctx.lineTo(-38, 56);
-      ctx.stroke();
-      break;
-    case 'swipe':
-      // Horseshoe magnet.
-      ctx.strokeStyle = '#ff6fd8';
-      ctx.lineWidth = 24;
-      ctx.beginPath();
-      ctx.arc(0, 0, 32, Math.PI, 0, true);
-      ctx.moveTo(-32, 0);
-      ctx.lineTo(-32, -36);
-      ctx.moveTo(32, 0);
-      ctx.lineTo(32, -36);
-      ctx.stroke();
-      ctx.fillStyle = '#d8dde6';
-      ctx.fillRect(-44, -56, 24, 18);
-      ctx.fillRect(20, -56, 24, 18);
-      ctx.strokeStyle = W;
-      ctx.lineWidth = 3;
-      for (const dx of [-32, 32]) {
-        ctx.beginPath();
-        ctx.moveTo(dx - 8, -66);
-        ctx.lineTo(dx, -76);
-        ctx.lineTo(dx + 8, -66);
-        ctx.stroke();
-      }
-      break;
-    case 'xray':
-      ctx.fillStyle = W;
-      ctx.beginPath();
-      ctx.moveTo(-50, 0);
-      ctx.quadraticCurveTo(0, -44, 50, 0);
-      ctx.quadraticCurveTo(0, 44, -50, 0);
-      ctx.fill();
-      circle(ctx, 0, 0, 18, '#8fd3ff');
-      circle(ctx, 0, 0, 8, '#1a0f12');
-      ctx.strokeStyle = '#8fd3ff';
-      ctx.lineWidth = 4;
-      for (let i = -2; i <= 2; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * 18, -34);
-        ctx.lineTo(i * 26, -54);
-        ctx.stroke();
-      }
-      break;
-  }
-  ctx.restore();
-}
 
 function drawFlights(ctx, now) {
   flights = flights.filter((f) => now - f.at < f.dur);
@@ -1283,4 +985,22 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+// Shockwaves: a ring that races outward and thins as it goes.
+function drawRings(ctx, now) {
+  rings = rings.filter((r) => now - r.at < r.dur);
+  for (const r of rings) {
+    const t = (now - r.at) / r.dur;
+    if (t < 0) continue;
+    const k = 1 - Math.pow(1 - t, 3);
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 40 * (1 - t) + 2;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, 20 + r.size * k, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
 }

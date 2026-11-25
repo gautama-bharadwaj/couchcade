@@ -86,9 +86,11 @@
 // to draw pictures instead of plain labels. Its exports are all optional:
 //   drawNamed(g, name, x, y, size, color?)   an icon centred in a size x size square
 //   drawCard(g, name, x, y, w, h, count)     a playing card (a locked tally shows these)
+//   drawHandCard(g, card, w, h)              a hand card's face, filling w x h (64 x 92); card is
+//                                            the hand entry, so `art` (and label, color…) pick it
 //   mapTile(g, art, x, y, r, seed), mapPiece(g, art, x, y, k, color), mapRoad(g, x1, y1, x2, y2,
 //   color, k), mapHarbor(g, x, y, k, art), mapCover(g, x, y, r)   pictures for the hexmap
-// Then these fields draw with it: tally rows `art`; choose options `art`, `artColor`, and
+// Then these fields draw with it: hand cards `art`; tally rows `art`; choose options `art`, `artColor`, and
 // `costs: [names]` (a row of icons); cards `art`, `artColor`, `icons: [names]`; hexmap tiles,
 // buildings and harbors `art`. Until the module loads (or if it fails) the labels show, so keep
 // them readable. The TV renderer can import the same module for a matching look.
