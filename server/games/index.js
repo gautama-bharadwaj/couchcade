@@ -51,6 +51,14 @@
 //       pins?: [{ cell, color }],          // other players' markers
 //       locked?: true, small?: true,       // locked = view only; small = a little reference copy
 //     },                                   // (drawn after input, before actions; arrow keys nudge the pick)
+//     dial: {                              // a 0–100 band between two ideas; sends { key, value: String(0–100) }
+//       key: 'dial', left: 'Bland', right: 'Spicy',
+//       value?,                            // your own needle (null = not set yet)
+//       crowd?, pins?: [{ value, color }], // a red shared needle, and other players' markers
+//       target?,                           // a white mark with scoring zones around it
+//       locked?: true, small?: true,       // locked = view only; small = a short reference copy
+//     },                                   // (drawn after cards, before choose; ←/→ nudge 1, ↑/↓ nudge 5)
+//                                          // changes to value / crowd / pins redraw in place, so drags aren't cut off
 //     grid: {                              // tappable word/tile grid; sends { key, value: cell.id }
 //       key: 'tile', cols: 5, locked?,     // locked = view only
 //       cells: [{ id, label, color?, ink?, // ink = text color
@@ -81,10 +89,11 @@ import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import tint from './tint.js';
 import hoard from './hoard.js';
+import tunein from './tunein.js';
 import sandbox from './sandbox.js';
 
 // Order within each tab is the order here. The first Board & Card game is picked when the server starts.
-export const GAMES = [shed, fuse, gala, tint, hoard, stickup, bumper, sumo, potato, pillowfort, sandbox];
+export const GAMES = [shed, fuse, gala, tint, hoard, tunein, stickup, bumper, sumo, potato, pillowfort, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
