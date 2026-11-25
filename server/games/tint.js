@@ -81,6 +81,13 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip). Drawn by drawRules in public/tv/games/tint.js.
+  rules: [
+    { art: 'wheel', title: 'A secret color', text: 'Each turn one player is the Teller. Their phone offers three secret colors from the wheel, and they pick one.' },
+    { art: 'clue', title: 'One word, then two', text: 'The Teller gives a one-word clue, then a two-word clue. No color names like red or blue: think lagoon, pumpkin or denim.' },
+    { art: 'pins', title: 'Pin it on your phone', text: 'Everyone else taps the wheel and locks in. After the second clue, move your pin, or keep it for a bonus if it was close.' },
+    { art: 'score', title: 'Closer scores more', text: 'A bullseye is 4 points, then 3, 2 and 1 for each step away. The Teller scores as much as their best guesser.' },
+  ],
 
   create({ players }) {
     const roster = shuffle([...players.values()].filter((p) => p.connected).map((p) => p.id));
@@ -232,7 +239,7 @@ export default {
 
     // ---- Phone screens ------------------------------------------------------------
     const wheel = (extra) => ({ key: 'cell', hues: HUES, rings: RINGS, colors: CELL_COLORS, ...extra });
-    const clueCards = () => st.clues.map((c, i) => ({ label: `“${cap(c)}”`, sub: i === 0 ? 'One-word clue' : 'Two-word clue', color: players.get(st.teller)?.color }));
+    const clueCards = () => st.clues.map((c, i) => ({ label: `“${cap(c)}”`, sub: i === 0 ? 'One-word clue' : 'Two-word clue', color: players.get(st.teller)?.color, art: 'bubble' }));
     const pinsOf = (ids) => ids.filter((g) => st.sel.has(g)).map((g) => ({ cell: st.sel.get(g), color: players.get(g)?.color ?? '#888' }));
 
     function screenFor(id) {
@@ -249,7 +256,7 @@ export default {
           : r?.cell == null
             ? ['No pin this time, so no points.']
             : [`${r.steps === 0 ? 'Bullseye!' : `${r.steps} step${r.steps === 1 ? '' : 's'} away.`} +${r.pts}${r.bonus ? ` and +${r.bonus} for calling it` : ''}.`];
-        return { title: teller ? 'Reveal' : r?.steps === 0 ? 'Bullseye!' : 'Reveal', wheel: wheel({ target: st.target, pins: pinsOf(guessers()), locked: true }), lines, cards: [{ label: `You have ${score.get(id)} points`, color: players.get(id)?.color }], footer: head };
+        return { title: teller ? 'Reveal' : r?.steps === 0 ? 'Bullseye!' : 'Reveal', wheel: wheel({ target: st.target, pins: pinsOf(guessers()), locked: true }), lines, cards: [{ label: `You have ${score.get(id)} points`, color: players.get(id)?.color, art: 'blob', artColor: players.get(id)?.color }], footer: head };
       }
 
       if (teller) {
@@ -259,7 +266,7 @@ export default {
             title: 'Pick a secret color',
             tag,
             lines: ['Only you can see these. Choose the one you can describe best.'],
-            choose: { key: 'pick', options: st.offers.map((c, i) => ({ id: String(c), label: ['First', 'Second', 'Third'][i], sub: `${ringWord(ringOf(c))}`, color: CELL_COLORS[c] })) },
+            choose: { key: 'pick', options: st.offers.map((c, i) => ({ id: String(c), label: ['First', 'Second', 'Third'][i], sub: `${ringWord(ringOf(c))}`, color: CELL_COLORS[c], art: 'chip', artColor: CELL_COLORS[c] })) },
             footer: timer,
           };
         }
@@ -387,7 +394,7 @@ export default {
       },
 
       playerView(id) {
-        return { screen: screenFor(id) };
+        return { screen: { art: 'tint', ...screenFor(id) } }; // drawn pins, paint chips (public/art/tint.js)
       },
 
       isOver: () => st.over,

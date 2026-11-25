@@ -427,7 +427,10 @@ function renderScreen(screen) {
     if (screen.tag.color) t.style.background = screen.tag.color;
     wrap.append(t);
   }
-  if (screen.swatch) {
+  if (screen.swatch && art?.drawSwatch) {
+    const w = Math.min(420, (body.clientWidth || 340) - 4);
+    wrap.append(artCanvas(w, 104, (g) => art.drawSwatch(g, w, 104, screen.swatch.color, screen.swatch.label), 'art'));
+  } else if (screen.swatch) {
     const sw = el('div', 'swatch');
     sw.style.background = screen.swatch.color;
     if (screen.swatch.label) sw.append(el('span', '', screen.swatch.label));
@@ -456,7 +459,7 @@ function renderScreen(screen) {
     wrap.append(cards);
   }
 
-  if (screen.dial) wrap.append(buildDial(screen.dial, el));
+  if (screen.dial) wrap.append(buildDial(screen.dial, el, art));
   else dialUpdate = dialNudge = null;
 
   if (screen.choose) {
@@ -541,7 +544,7 @@ function renderScreen(screen) {
     wrap.append(grid);
   }
 
-  if (screen.wheel) wrap.append(buildWheel(screen.wheel, el));
+  if (screen.wheel) wrap.append(buildWheel(screen.wheel, el, art));
   else wheelNudge = null;
 
   if (screen.actions?.length) {
@@ -802,7 +805,7 @@ function buildHexmap(m, el, art) {
 // clockwise from the top. Tap a swatch or nudge with the buttons / arrow keys; the pick is drawn
 // at once and sent to the server, which echoes it back as `selected`.
 let wheelNudge = null; // (dHue, dRing) for the arrow keys, while a wheel can be picked from
-function buildWheel(w, el) {
+function buildWheel(w, el, art) {
   const { key, hues, rings, colors, pins = [], target = null, first = null, locked = false, small = false } = w;
   let sel = w.selected ?? null;
   const box = el('div', 'wheel');
@@ -811,7 +814,8 @@ function buildWheel(w, el) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = canvas.height = Math.round(size * dpr);
   canvas.style.width = canvas.style.height = `${size}px`;
-  const R = size / 2 - 3;
+  // With drawn art, a frame goes around the wheel (art.wheelRim draws about R * 0.075 outside R).
+  const R = art?.wheelRim ? (size / 2 - 3) / 1.075 : size / 2 - 3;
   const r0 = R * 0.24;
   const band = (R - r0) / rings;
   const step = (Math.PI * 2) / hues;
@@ -838,6 +842,7 @@ function buildWheel(w, el) {
   function draw() {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, size, size);
+    if (art?.wheelRim) art.wheelRim(g, size / 2, size / 2, R);
     for (let c = 0; c < hues * rings; c++) {
       cellPath(c);
       g.fillStyle = colors[c];
@@ -848,20 +853,27 @@ function buildWheel(w, el) {
     }
     // The middle previews the swatch you picked (or the secret one), big enough to judge.
     const preview = sel ?? target;
-    g.beginPath();
-    g.arc(size / 2, size / 2, r0 - 4, 0, Math.PI * 2);
-    g.fillStyle = preview != null ? colors[preview] : '#141824';
-    g.fill();
-    if (preview == null) {
-      g.fillStyle = '#8a93a8';
-      g.font = `800 ${Math.round(r0 * 0.5)}px system-ui, sans-serif`;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText('?', size / 2, size / 2);
+    if (art?.wheelMiddle) art.wheelMiddle(g, size / 2, size / 2, r0 - 4, preview != null ? colors[preview] : null);
+    else {
+      g.beginPath();
+      g.arc(size / 2, size / 2, r0 - 4, 0, Math.PI * 2);
+      g.fillStyle = preview != null ? colors[preview] : '#141824';
+      g.fill();
+      if (preview == null) {
+        g.fillStyle = '#8a93a8';
+        g.font = `800 ${Math.round(r0 * 0.5)}px system-ui, sans-serif`;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText('?', size / 2, size / 2);
+      }
     }
     if (first != null && first !== sel) ring(first, '#f2f4f8', [4, 3]);
     for (const p of pins) {
       const [x, y] = centre(p.cell);
+      if (art?.wheelPin) {
+        art.wheelPin(g, x, y, Math.max(8, band * 0.62), p.color);
+        continue;
+      }
       g.beginPath();
       g.arc(x, y, Math.max(4, band * 0.28), 0, Math.PI * 2);
       g.fillStyle = p.color;
@@ -933,7 +945,7 @@ function buildWheel(w, el) {
 let dialUpdate = null; // (dial) redraws in place with new pins / crowd / value
 let dialNudge = null; // (delta) for the arrow keys, while the dial can be moved
 const DIAL_SEND_MS = 80;
-function buildDial(d0, el) {
+function buildDial(d0, el, art) {
   let d = d0;
   let val = d.value ?? null;
   let dragging = false;
@@ -958,24 +970,27 @@ function buildDial(d0, el) {
   function draw() {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, W, H);
-    // The band: cool on the left, warm on the right.
-    const grad = g.createLinearGradient(PAD, 0, W - PAD, 0);
-    grad.addColorStop(0, '#2c6e8f');
-    grad.addColorStop(0.5, '#3b3f4f');
-    grad.addColorStop(1, '#a0522d');
-    g.fillStyle = grad;
-    g.beginPath();
-    g.roundRect(PAD - 8, bandTop, W - PAD * 2 + 16, bandH, 10);
-    g.fill();
-    g.strokeStyle = 'rgba(255,255,255,.35)';
-    g.lineWidth = 1;
-    for (let v = 0; v <= 100; v += 5) {
-      const x = xOf(v);
-      const long = v % 25 === 0;
+    // The band: cool on the left, warm on the right (or the art's own face).
+    if (art?.dialFace) art.dialFace(g, PAD - 8, bandTop, W - PAD * 2 + 16, bandH, xOf);
+    else {
+      const grad = g.createLinearGradient(PAD, 0, W - PAD, 0);
+      grad.addColorStop(0, '#2c6e8f');
+      grad.addColorStop(0.5, '#3b3f4f');
+      grad.addColorStop(1, '#a0522d');
+      g.fillStyle = grad;
       g.beginPath();
-      g.moveTo(x, bandTop + bandH - (long ? 16 : 8));
-      g.lineTo(x, bandTop + bandH);
-      g.stroke();
+      g.roundRect(PAD - 8, bandTop, W - PAD * 2 + 16, bandH, 10);
+      g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.35)';
+      g.lineWidth = 1;
+      for (let v = 0; v <= 100; v += 5) {
+        const x = xOf(v);
+        const long = v % 25 === 0;
+        g.beginPath();
+        g.moveTo(x, bandTop + bandH - (long ? 16 : 8));
+        g.lineTo(x, bandTop + bandH);
+        g.stroke();
+      }
     }
     if (d.target != null) {
       for (const [w, c] of ZONES) {
@@ -987,12 +1002,17 @@ function buildDial(d0, el) {
       g.fillRect(xOf(d.target) - 1.5, bandTop - 4, 3, bandH + 8);
     }
     for (const p of d.pins ?? []) {
+      if (art?.dialPin) {
+        art.dialPin(g, xOf(p.value), bandTop, p.color);
+        continue;
+      }
       g.beginPath();
       g.arc(xOf(p.value), bandTop - 9, 6, 0, Math.PI * 2);
       g.fillStyle = p.color;
       g.fill();
     }
-    if (d.crowd != null) {
+    if (d.crowd != null && art?.dialNeedle) art.dialNeedle(g, xOf(d.crowd), bandTop, bandH);
+    else if (d.crowd != null) {
       const x = xOf(d.crowd);
       g.fillStyle = '#ff3b3b';
       g.fillRect(x - 2, bandTop - 2, 4, bandH + 4);
@@ -1005,6 +1025,7 @@ function buildDial(d0, el) {
     if (val != null) {
       const x = xOf(val);
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#fff';
+      if (art?.dialMine) return art.dialMine(g, x, bandTop, bandH, accent);
       g.lineWidth = 3;
       g.strokeStyle = '#0d0f14';
       g.fillStyle = accent;
