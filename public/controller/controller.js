@@ -330,6 +330,56 @@ $('rulesTvBtn').addEventListener('click', () => cmd({ t: 'rules', do: 'show' }))
 // Rebuilt only when the screen JSON changes, so a half-typed message survives the 10/s updates.
 let lastScreen = null;
 let lastRest = null;
+let currentScreen = null;
+
+// Drawn art (see "Drawn art" in server/games/index.js): a screen can name a module in public/art/
+// (`screen.art`) that draws its icons, cards and map pieces on small canvases. Until it has loaded,
+// or if it can't, the plain labels show instead.
+const artMods = new Map(); // name -> module, null (failed) or a Promise (loading)
+function artModule(name) {
+  if (!name || !/^[a-z0-9-]+$/.test(name)) return null;
+  const m = artMods.get(name);
+  if (m === undefined) {
+    artMods.set(name, import(`/art/${name}.js`).then(
+      (mod) => {
+        artMods.set(name, mod);
+        lastScreen = null; // draw the screen again, now with pictures
+        renderScreen(currentScreen);
+      },
+      (err) => {
+        artMods.set(name, null);
+        console.error('art failed to load', err);
+      },
+    ));
+    return null;
+  }
+  return m instanceof Promise ? null : m;
+}
+
+/** A small canvas, w x h CSS pixels, drawn by fn(g) at the screen's pixel density. */
+function artCanvas(w, h, fn, cls = 'art') {
+  const c = document.createElement('canvas');
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(w * dpr);
+  c.height = Math.round(h * dpr);
+  c.style.width = `${w}px`;
+  c.style.height = `${h}px`;
+  c.className = cls;
+  const g = c.getContext('2d');
+  g.scale(dpr, dpr);
+  try {
+    fn(g);
+  } catch (err) {
+    console.error('art failed to draw', err);
+  }
+  return c;
+}
+
+/** A row of small icons (e.g. a cost), or null when there's no art for it. */
+function iconStrip(art, names, size = 22, color) {
+  if (!art?.drawNamed || !names?.length) return null;
+  return artCanvas(names.length * (size + 4), size + 2, (g) => names.forEach((n, i) => art.drawNamed(g, n, size / 2 + 1 + i * (size + 4), size / 2 + 1, size, color)), 'art strip');
+}
 let dialDragging = false;
 let pendingScreen;
 let lastTitle = null;
@@ -338,6 +388,7 @@ function renderScreen(screen) {
   // buttons under someone's thumb.
   $('screenFooter').textContent = screen?.footer ?? '';
   const json = JSON.stringify(screen ? { ...screen, footer: undefined } : null);
+  currentScreen = screen;
   if (json === lastScreen) return;
   // A dial that's the only thing that changed (someone else moved, or the server echoed our own
   // needle) is redrawn in place, so a drag in progress isn't interrupted.
@@ -365,6 +416,7 @@ function renderScreen(screen) {
     if (text != null) e.textContent = text;
     return e;
   };
+  const art = artModule(screen.art);
   const wrap = el('div');
   wrap.style.cssText = 'display:flex;flex-direction:column;gap:12px';
   body.append(wrap);
@@ -382,15 +434,23 @@ function renderScreen(screen) {
     wrap.append(sw);
   }
   for (const line of screen.lines ?? []) wrap.append(el('p', '', line));
-  if (screen.tally) wrap.append(buildTally(screen.tally, el));
+  if (screen.tally) wrap.append(buildTally(screen.tally, el, art));
 
   if (screen.cards?.length) {
     const cards = el('div', 'cards');
     for (const c of screen.cards) {
       const card = el('div', 'card');
       if (c.color) card.style.borderLeftColor = c.color;
-      card.append(el('div', 't', c.label));
-      if (c.sub) card.append(el('div', 'd', c.sub));
+      const body = el('div');
+      body.append(el('div', 't', c.label));
+      const strip = iconStrip(art, c.icons, 24);
+      if (strip) body.append(strip);
+      if (c.sub) body.append(el('div', 'd', c.sub));
+      if (art?.drawNamed && c.art) {
+        card.classList.add('withArt');
+        card.append(artCanvas(40, 40, (g) => art.drawNamed(g, c.art, 20, 20, 36, c.artColor)));
+      }
+      card.append(body);
       cards.append(card);
     }
     wrap.append(cards);
@@ -405,9 +465,12 @@ function renderScreen(screen) {
     for (const o of options) {
       const b = el('button', `opt${o.id === selected ? ' sel' : ''}${locked ? ' locked' : ''}`);
       b.disabled = !!o.disabled;
-      if (o.color) b.append(Object.assign(el('span', 'dot'), { style: `background:${o.color}` }));
+      if (art?.drawNamed && o.art) b.append(artCanvas(44, 44, (g) => art.drawNamed(g, o.art, 22, 22, 40, o.artColor)));
+      else if (o.color) b.append(Object.assign(el('span', 'dot'), { style: `background:${o.color}` }));
       const txt = el('div');
       txt.append(el('div', 't', o.label));
+      const strip = iconStrip(art, o.costs, 22);
+      if (strip) txt.append(strip);
       if (o.sub) txt.append(el('div', 'd', o.sub));
       b.append(txt);
       if (!locked) b.addEventListener('click', () => act(key, o.id));
@@ -452,7 +515,7 @@ function renderScreen(screen) {
     wrap.append(row);
   }
 
-  if (screen.hexmap) wrap.append(buildHexmap(screen.hexmap, el));
+  if (screen.hexmap) wrap.append(buildHexmap(screen.hexmap, el, art));
   if (screen.grid) {
     const { key, cols = 5, cells = [], locked } = screen.grid;
     const grid = el('div', `grid${locked ? ' locked' : ''}`);
@@ -495,13 +558,21 @@ function renderScreen(screen) {
 
 // Counters (see "tally" in server/games/index.js): groups of resource-style chips, each with
 // − and + buttons unless locked. Sends { key, value: 'group:row:+' } (or '-').
-function buildTally(t, el) {
+// With drawn art, a row's `art` draws its icon, and a locked tally shows illustrated cards.
+function buildTally(t, el, art) {
   const { key, groups = [], locked = false } = t;
   const box = el('div', 'tally');
   for (const g of groups) {
     if (g.title) box.append(el('div', 'tt', g.title));
     const row = el('div', 'trow');
     for (const r of g.rows ?? []) {
+      if (locked && r.art && art?.drawCard) {
+        const cell = el('div', `tcard${r.value ? '' : ' zero'}`);
+        cell.append(artCanvas(60, 84, (c) => art.drawCard(c, r.art, 30, 42, 54, 78, r.value ?? 0)));
+        if (r.sub) cell.append(el('small', '', r.sub));
+        row.append(cell);
+        continue;
+      }
       const cell = el('div', `tcell${r.value ? '' : ' zero'}`);
       if (r.color) cell.style.setProperty('--c', r.color);
       const mk = (dir, label, disabled) => {
@@ -512,7 +583,8 @@ function buildTally(t, el) {
       };
       if (!locked) cell.append(mk('+', '+', r.max != null && r.value >= r.max));
       const face = el('div', 'tface');
-      face.append(el('span', 'ti', r.label), el('b', '', String(r.value ?? 0)));
+      if (r.art && art?.drawNamed) face.append(artCanvas(32, 32, (c) => art.drawNamed(c, r.art, 16, 16, 30)), el('b', '', String(r.value ?? 0)));
+      else face.append(el('span', 'ti', r.label), el('b', '', String(r.value ?? 0)));
       if (r.sub) face.append(el('small', '', r.sub));
       cell.append(face);
       if (!locked) cell.append(mk('-', '−', !r.value));
@@ -526,7 +598,8 @@ function buildTally(t, el) {
 // Hex map (see "hexmap" in server/games/index.js): pointy-top hexes of radius 1 in map units,
 // fitted to the screen width. Tap near a glowing spot to pick it; the pick is drawn at once and
 // sent as { key, value: spot.id }, and the server echoes it back as `selected`.
-function buildHexmap(m, el) {
+// With drawn art (tiles carrying `art`, and an art module with map hooks) the island is pictures.
+function buildHexmap(m, el, art) {
   const { key, tiles = [], roads = [], buildings = [], harbors = [], spots = [], locked = false } = m;
   let sel = m.selected ?? null;
   const box = el('div', 'hexmap');
@@ -547,6 +620,23 @@ function buildHexmap(m, el) {
   const Y = (y) => (y - minY) * k;
   const g = canvas.getContext('2d');
   const font = (px, w = 800) => `${w} ${Math.round(px)}px system-ui, sans-serif`;
+  const pics = !!(art?.mapTile && tiles.some((t) => t.art));
+  // The tiles' pictures don't change while this map is up: draw them once.
+  let tileLayer = null;
+  if (pics) {
+    tileLayer = document.createElement('canvas');
+    tileLayer.width = canvas.width;
+    tileLayer.height = canvas.height;
+    const tg = tileLayer.getContext('2d');
+    tg.scale(dpr, dpr);
+    tiles.forEach((t, i) => {
+      try {
+        art.mapTile(tg, t.art, X(t.x), Y(t.y), k * 0.97, i + 1);
+      } catch (err) {
+        console.error('map art failed', err);
+      }
+    });
+  }
 
   function hex(x, y, r) {
     g.beginPath();
@@ -565,11 +655,41 @@ function buildHexmap(m, el) {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     for (const h of harbors) {
+      if (pics && h.art && art.mapHarbor) {
+        art.mapHarbor(g, X(h.x), Y(h.y), k, h.art);
+        continue;
+      }
       g.fillStyle = '#e8eef8';
       g.font = font(k * 0.3);
       g.fillText(h.label, X(h.x), Y(h.y));
     }
-    for (const t of tiles) {
+    if (pics) {
+      g.drawImage(tileLayer, 0, 0, W, H);
+      for (const t of tiles) {
+        if (t.num) {
+          const ty = Y(t.y) + k * 0.36;
+          g.beginPath();
+          g.arc(X(t.x), ty, k * 0.27, 0, Math.PI * 2);
+          g.fillStyle = '#f6ecd2';
+          g.fill();
+          g.lineWidth = 1.5;
+          g.strokeStyle = '#8a6a3c';
+          g.stroke();
+          g.fillStyle = t.hot ? '#c8261f' : '#2a1d10';
+          g.font = `900 ${Math.round(k * 0.32)}px Georgia, serif`;
+          g.fillText(String(t.num), X(t.x), ty + 1);
+        }
+        if (t.dim) {
+          if (art.mapCover) art.mapCover(g, X(t.x), Y(t.y), k);
+          else {
+            hex(t.x, t.y, 0.98);
+            g.fillStyle = 'rgba(40,40,48,.72)';
+            g.fill();
+          }
+        }
+      }
+    }
+    for (const t of pics ? [] : tiles) {
       hex(t.x, t.y, 0.98);
       g.fillStyle = t.color;
       g.fill();
@@ -596,6 +716,10 @@ function buildHexmap(m, el) {
     }
     g.lineCap = 'round';
     for (const r of roads) {
+      if (pics && art.mapRoad) {
+        art.mapRoad(g, X(r.x1), Y(r.y1), X(r.x2), Y(r.y2), r.color, k);
+        continue;
+      }
       g.beginPath();
       g.moveTo(X(r.x1), Y(r.y1));
       g.lineTo(X(r.x2), Y(r.y2));
@@ -607,6 +731,10 @@ function buildHexmap(m, el) {
       g.stroke();
     }
     for (const b of buildings) {
+      if (pics && b.art && art.mapPiece) {
+        art.mapPiece(g, b.art, X(b.x), Y(b.y), k, b.color);
+        continue;
+      }
       const r = k * (b.kind === 'tower' ? 0.26 : 0.19);
       g.beginPath();
       if (b.kind === 'tower') g.rect(X(b.x) - r * 0.7, Y(b.y) - r, r * 1.4, r * 2);
@@ -629,13 +757,13 @@ function buildHexmap(m, el) {
         g.beginPath();
         g.moveTo(X(s.x1 + (s.x2 - s.x1) * 0.2), Y(s.y1 + (s.y2 - s.y1) * 0.2));
         g.lineTo(X(s.x1 + (s.x2 - s.x1) * 0.8), Y(s.y1 + (s.y2 - s.y1) * 0.8));
-        if (on) {
-          g.lineWidth = k * 0.26;
-          g.strokeStyle = '#0d0f14';
+        if (on || pics) {
+          g.lineWidth = on ? k * 0.26 : k * 0.17;
+          g.strokeStyle = on ? '#0d0f14' : 'rgba(13,15,20,.55)';
           g.stroke();
         }
         g.lineWidth = on ? k * 0.16 : k * 0.1;
-        g.strokeStyle = on ? '#fff' : 'rgba(255,255,255,.6)';
+        g.strokeStyle = on ? '#fff' : pics ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.6)';
         g.stroke();
       } else {
         g.beginPath();

@@ -84,7 +84,7 @@
     #resList li b { margin-left: auto; }
 
     /* Game screens (turn-based games): portrait, scrollable, built from the game's playerView().screen */
-    #screen { flex-direction: column; gap: 12px; overflow-y: auto; padding-top: max(44px, env(safe-area-inset-top)); }
+    #screen { flex-direction: column; gap: 12px; overflow-y: auto; padding-top: max(58px, calc(env(safe-area-inset-top) + 48px)); }
     #screen h2 { margin: 0; font-size: 1.6rem; font-weight: 900; }
     #screen .tag { align-self: flex-start; padding: 4px 12px; border-radius: 999px; font-weight: 800; color: #0d0f14; background: var(--accent); }
     #screen p { margin: 0; font-size: 1.1rem; line-height: 1.35; }
@@ -134,6 +134,12 @@
     #screen .tface .ti { font-size: 1.5rem; }
     #screen .tface b { font-size: 1.3rem; }
     #screen .tface small { font-size: .62rem; color: var(--muted); font-weight: 700; }
+    #screen .tcard { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    #screen .tcard.zero canvas { opacity: .35; }
+    #screen .tcard small { font-size: .66rem; color: var(--muted); font-weight: 700; }
+    #screen canvas.art { display: block; flex: none; }
+    #screen canvas.strip { margin: 4px 0 2px; }
+    #screen .card.withArt { display: flex; align-items: center; gap: 12px; }
     #screen .tbtn { border: 0; background: #232a3b; color: inherit; font-size: 1.3rem; font-weight: 900; padding: 6px 0; }
     #screen .hexmap { display: flex; justify-content: center; }
     #screen .hexmap canvas { touch-action: manipulation; border-radius: 14px; }
