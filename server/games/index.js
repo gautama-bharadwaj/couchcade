@@ -29,6 +29,7 @@
 //   {
 //     title: 'Night 2',                    // big heading
 //     tag: { label: 'Thief', color },      // badge, e.g. a secret role
+//     swatch: { color, label? },           // a big block of one color (a secret color, say)
 //     lines: ['You are in the Library.'],  // paragraphs
 //     cards: [{ label, sub?, color? }],    // read-only info tiles (clues, who you saw…)
 //     choose: {                            // pick one option; sends { key, value: option.id }
@@ -41,6 +42,13 @@
 //       // playable:false = dimmed, not tappable; dim:true = dimmed but still tappable; selected:true = raised
 //     },
 //     input: { key: 'msg', placeholder, maxLength, submitLabel },  // text box; sends { key, value: text }
+//     wheel: {                             // tappable color wheel; sends { key, value: String(cell) }
+//       key: 'cell', hues: 24, rings: 6,   // cell = ring * hues + hue; ring 0 is the middle, hue 0 at the top
+//       colors: ['#…', …],                 // hues * rings colors, in cell order
+//       selected?, target?, first?,        // outlined cells (your pick, the answer, an earlier dashed pick)
+//       pins?: [{ cell, color }],          // other players' markers
+//       locked?: true, small?: true,       // locked = view only; small = a little reference copy
+//     },                                   // (drawn after input, before actions; arrow keys nudge the pick)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
 //   }
@@ -55,9 +63,10 @@ import sumo from './sumo.js';
 import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
+import tint from './tint.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, sandbox];
+export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
