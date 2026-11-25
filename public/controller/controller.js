@@ -112,10 +112,15 @@ function show(id) {
 function render() {
   const isHost = phase.hostId === me.id;
   document.body.classList.toggle('host', isHost);
+  document.body.classList.toggle('hasRules', phase.phase === 'playing' && !!phase.rules?.length);
+  if (phase.phase !== 'playing' || phase.intro) $('rulesSheet').classList.remove('show');
 
   if (phase.phase === 'lobby') {
     show('lobby');
     renderLobby(isHost);
+  } else if (phase.phase === 'playing' && phase.intro && phase.rules) {
+    renderIntro(isHost);
+    show('intro');
   } else if (phase.phase === 'playing' && phase.controller?.type === 'screens') {
     $('hudStatus').textContent = '';
     if (!document.getElementById('screen').classList.contains('active')) {
@@ -220,6 +225,45 @@ $('startBtn').addEventListener('click', () => cmd({ t: 'start' }));
 $('addBotBtn').addEventListener('click', () => cmd({ t: 'addBot' }));
 $('removeBotBtn').addEventListener('click', () => cmd({ t: 'removeBot' }));
 $('endBtn').addEventListener('click', () => cmd({ t: 'end' }));
+
+// --- How to play ------------------------------------------------------------------
+// While the TV plays a game's rules, every phone shows the same step; the host can step or skip.
+function gameTitle() {
+  return phase.games.find((g) => g.id === phase.gameId)?.title ?? '';
+}
+
+function renderIntro(isHost) {
+  const { step } = phase.intro;
+  const steps = phase.rules;
+  const host = phase.players.find((p) => p.id === phase.hostId);
+  $('introKicker').textContent = `How to play ${gameTitle()} · ${step + 1} of ${steps.length}`;
+  $('introDots').innerHTML = steps.map((_, i) => `<i class="${i === step ? 'on' : i < step ? 'done' : ''}"></i>`).join('');
+  $('introTitle').textContent = steps[step].title;
+  $('introText').textContent = steps[step].text;
+  $('introGuest').textContent = isHost ? '' : `Watch the TV. ${host?.name ?? 'The host'} can skip ahead.`;
+  $('introHost').style.display = isHost ? '' : 'none';
+  $('introBack').disabled = step === 0;
+  $('introNext').textContent = step === steps.length - 1 ? 'Done ›' : 'Next ›';
+}
+$('introBack').addEventListener('click', () => cmd({ t: 'rules', do: 'back' }));
+$('introNext').addEventListener('click', () => cmd({ t: 'rules', do: 'next' }));
+$('introSkip').addEventListener('click', () => cmd({ t: 'rules', do: 'skip' }));
+
+// Anyone can read the rules again mid-game on their own phone; the host can replay them on the TV.
+$('rulesBtn').addEventListener('click', () => {
+  if (!phase?.rules) return;
+  $('rulesSheetTitle').textContent = `How to play ${gameTitle()}`;
+  const list = $('rulesList');
+  list.innerHTML = '';
+  for (const r of phase.rules) {
+    const li = document.createElement('li');
+    li.append(Object.assign(document.createElement('b'), { textContent: r.title }), Object.assign(document.createElement('span'), { textContent: r.text }));
+    list.append(li);
+  }
+  $('rulesSheet').classList.add('show');
+});
+$('rulesClose').addEventListener('click', () => $('rulesSheet').classList.remove('show'));
+$('rulesTvBtn').addEventListener('click', () => cmd({ t: 'rules', do: 'show' }));
 
 // --- Game screens (turn-based games) ---------------------------------------------
 // Rebuilt only when the screen JSON changes, so a half-typed message survives the 10/s updates.

@@ -75,7 +75,9 @@ Flags work with the downloads, `npx couchcade` and `npm start --`; `couchcade --
 
 The game picker has two tabs: **Board & Card** (turn-based games on your phone's screen, the default) and **Arcade** (real-time joystick games like Stickup).
 
-TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **Tab** switches between Board & Card and Arcade, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one).
+Games with a how-to-play intro (Fuse so far) open with a short animated walkthrough on the TV, under a minute, while the game waits. Every phone shows the same step; the host can step through it or tap **Skip rules** if everyone already knows the game. Mid-game, the **? Rules** button on any phone lists the rules again, and the host can replay the intro on the TV from there (or press **R** on the TV).
+
+TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **Tab** switches between Board & Card and Arcade, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one). During a how-to-play intro: **S**, **Esc** or **Enter** skip it, **←/→** step through it; **R** replays it mid-game.
 
 ### Sound
 
@@ -128,7 +130,7 @@ server/
   runtime.js          packaged app or source? (node:sea), opening the browser
   log.js              buffered, leveled logging (see Logging)
   lobby.js            who's here
-  session.js          shared game flow (pick, start, results)
+  session.js          shared game flow (pick, start, how-to-play intro, results)
   arena.js            1600x900 logical canvas shared by all games
   games/index.js      game registry + the game contract (read this first)
   games/bumper.js
@@ -137,6 +139,7 @@ server/
   games/sandbox.js
 public/
   tv/tv.js            TV core: lobby/results screens, interpolation, render loop
+  tv/rules.js         the how-to-play overlay (steps come from each game's `rules`)
   tv/games/index.js   TV renderer registry
   tv/games/<id>.js    how each game is drawn
   controller/         phone UI: join, lobby, pad (buttons come from the game), results
