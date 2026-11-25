@@ -17,16 +17,19 @@ let lastNow = 0;
 let revealSeq = -1;
 let revealAt = 0;
 let speckle = null;
+let announced = 0; // the turn whose DJ the narrator last announced
 
 export default {
+  drawRules, // the how-to-play pictures; the steps themselves are in server/games/tunein.js
+
   onSnapshot(prev, s, audio) {
     const { sfx, say, pick } = audio;
     const nameOf = (id) => s.players.find((p) => p.id === id)?.name ?? 'Someone';
-    if (!prev) {
-      sfx.static(0.8);
-      if (s.phase === 'rules') say(pick(['Tune in! Check your phone for how to play.', 'Welcome to Tune In. The rules are on your phones.']), { delay: 0.8 });
-    }
-    if (s.phase === 'pick' && (!prev || prev.turn !== s.turn)) {
+    // The how-to-play intro pauses snapshots, so announce each DJ the first time we see their turn.
+    if (s.turn < announced) announced = 0; // a new game
+    if (s.phase === 'pick' && s.turn !== announced) {
+      announced = s.turn;
+      if (s.turn === 1) sfx.static(0.8);
       sfx.chime();
       say(s.turn === 1 ? `${nameOf(s.dj)} is the first DJ.` : pick([`${nameOf(s.dj)} is the DJ.`, `Over to ${nameOf(s.dj)}.`, `${nameOf(s.dj)}, you're on the air.`]), { delay: 0.3 });
     }
@@ -36,7 +39,6 @@ export default {
       say(`From ${s.card[0]} to ${s.card[1]}. The clue is: ${s.clue}.`, { delay: 0.4, interrupt: true });
     }
     if (s.locked.length > prev.locked.length) sfx.click();
-    if (s.ready.length > prev.ready.length) sfx.click();
     if (s.phase === 'tune' && s.left !== prev.left && s.left <= 5 && s.left > 0) sfx.tick();
     if (s.phase === 'reveal' && prev.phase !== 'reveal' && s.reveal) {
       sfx.static(REVEAL_DELAY / 1000);
@@ -74,7 +76,7 @@ export default {
     text(ctx, '📻 Tune In', 90, 96, { size: 46, weight: 900, align: 'left' });
     if (s.turn > 0) text(ctx, `Turn ${s.turn} of ${s.turns}`, 1510, 80, { size: 26, weight: 700, align: 'right', color: '#a99aa6' });
     signalMeter(ctx, s, 1510, 120);
-    if (dj && s.phase !== 'rules') {
+    if (dj) {
       circle(ctx, 104, 146, 13, dj.color);
       text(ctx, `${dj.name} is the DJ`, 128, 156, { size: 30, weight: 800, align: 'left', color: dj.color });
     }
@@ -134,7 +136,6 @@ export default {
     }
     const revealed = s.phase === 'reveal' && now - revealAt > REVEAL_DELAY;
     const status = {
-      rules: 'Read the rules on your phone, then tap Got it',
       pick: '',
       clue: '',
       tune: 'Drag your needle on your phone. Talk it out!',
@@ -152,7 +153,7 @@ export default {
       const x = 90 + i * cw;
       const y = 752;
       ctx.globalAlpha = p.connected ? 1 : 0.45;
-      ctx.fillStyle = p.id === s.dj && s.phase !== 'rules' ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.04)';
+      ctx.fillStyle = p.id === s.dj ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.04)';
       ctx.beginPath();
       ctx.roundRect(x, y - 36, cw - 12, 72, 14);
       ctx.fill();
@@ -161,8 +162,7 @@ export default {
       text(ctx, fit(ctx, p.name, cw - 110), x + 44, y, { size: 24, weight: 700, align: 'left' });
       text(ctx, String(p.score), x + cw - 26, y + 2, { size: 30, weight: 900, align: 'right' });
       let note = '';
-      if (s.phase === 'rules') note = s.ready.includes(p.id) ? '✓ ready' : '';
-      else if (p.id === s.dj) note = revealed ? `DJ +${s.reveal.pts}` : 'DJ';
+      if (p.id === s.dj) note = revealed ? `DJ +${s.reveal.pts}` : 'DJ';
       else if (s.phase === 'tune') note = s.locked.includes(p.id) ? '✓ locked' : s.needles.some((x) => x.id === p.id) ? 'tuning…' : '';
       else if (revealed) note = gained.get(p.id) ? `+${gained.get(p.id)}` : '';
       text(ctx, note, x + 44, y + 26, { size: 18, weight: 800, align: 'left', color: note.startsWith('✓') ? '#4cd97b' : '#a99aa6' });
@@ -171,7 +171,6 @@ export default {
 
     text(ctx, 'Crystal clear 4 · Clear 3 · Crackly 2 · the crew shares the points, your own needle scores for you', W / 2, 836, { size: 20, weight: 600, color: '#6e6470' });
 
-    if (s.phase === 'rules') rulesCard(ctx, W);
   },
 };
 
@@ -237,7 +236,7 @@ function radio(ctx, s, now) {
       ctx.fillRect(xOf(s.station) - 2, GY0 - 6, 4, GY1 - GY0 + 12);
       ctx.globalAlpha = 1;
     }
-  } else if (s.phase === 'rules' || s.phase === 'pick') {
+  } else if (s.phase === 'pick') {
     staticOver(ctx, now, 0.25);
   }
 
@@ -287,27 +286,101 @@ function signalMeter(ctx, s, xr, y) {
   });
 }
 
-function rulesCard(ctx, W) {
-  ctx.fillStyle = 'rgba(12,9,12,.92)';
+// ---- How-to-play pictures (the steps are in server/games/tunein.js) ---------------------
+// box = { x, y, w, h } on the TV; t = seconds into the step.
+function drawRules(ctx, art, t, box, now) {
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  const w = box.w - 120;
+  const x0 = cx - w / 2;
+  const at = (v) => x0 + (w * v) / 100;
+  const y0 = cy - 20;
+  const y1 = cy + 70;
+  const STATION = 62;
+  ctx.save();
+  // The band itself
+  const glass = ctx.createLinearGradient(0, y0, 0, y1);
+  glass.addColorStop(0, '#f6e7b8');
+  glass.addColorStop(1, '#e2c784');
+  ctx.fillStyle = '#5c3520';
   ctx.beginPath();
-  ctx.roundRect(W / 2 - 640, 200, 1280, 450, 26);
+  ctx.roundRect(x0 - 30, y0 - 24, w + 60, y1 - y0 + 48, 20);
   ctx.fill();
-  ctx.strokeStyle = '#c9a25a';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  text(ctx, 'How to play', W / 2, 262, { size: 44, weight: 900, color: '#ffc93c' });
-  const lines = [
-    ['🎧', 'Each turn one player is the DJ and secretly sees where the station is.'],
-    ['💬', 'The DJ gives a clue: a thing that sits at that spot between the two ideas.'],
-    ['🎚️', 'Everyone else drags a needle on their phone. The red needle is the average.'],
-    ['🗣️', 'Talk it out, then lock in. The closer the red needle, the more points.'],
-    ['📶', 'Crystal clear 4 · Clear 3 · Crackly 2. The whole crew shares them.'],
-  ];
-  lines.forEach(([icon, line], i) => {
-    const y = 336 + i * 64;
-    text(ctx, icon, W / 2 - 580, y, { size: 32, align: 'left' });
-    text(ctx, line, W / 2 - 526, y, { size: 28, weight: 600, align: 'left' });
-  });
+  ctx.fillStyle = glass;
+  ctx.beginPath();
+  ctx.roundRect(x0 - 10, y0, w + 20, y1 - y0, 10);
+  ctx.fill();
+  text(ctx, '◀ Bland', x0 - 20, y1 + 74, { size: 34, weight: 900, align: 'left', color: '#8fd3f0' });
+  text(ctx, 'Spicy ▶', x0 + w + 20, y1 + 74, { size: 34, weight: 900, align: 'right', color: '#ffb27a' });
+
+  const marker = (v, color, letter, y = y0 - 36) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(at(v), y + 14);
+    ctx.lineTo(at(v), y0 - 4);
+    ctx.stroke();
+    circle(ctx, at(v), y, 16, color);
+    text(ctx, letter, at(v), y + 7, { size: 19, weight: 900, color: '#0d0f14' });
+  };
+  const needle = (v) => {
+    ctx.fillStyle = '#ff2e2e';
+    ctx.fillRect(at(v) - 3, y0 - 8, 6, y1 - y0 + 16);
+    ctx.beginPath();
+    ctx.moveTo(at(v) - 13, y1 + 26);
+    ctx.lineTo(at(v) + 13, y1 + 26);
+    ctx.lineTo(at(v), y1 + 9);
+    ctx.fill();
+  };
+  const zones = (alpha) => {
+    ctx.globalAlpha = alpha;
+    [[13, ZONE_COLORS[2]], [8, ZONE_COLORS[1]], [3, ZONE_COLORS[0]]].forEach(([d, c]) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(at(STATION - d), y0 + 3, at(STATION + d) - at(STATION - d), y1 - y0 - 6);
+    });
+    for (const [v, pts] of [[STATION, 4], [STATION - 5.5, 3], [STATION + 5.5, 3], [STATION - 10.5, 2], [STATION + 10.5, 2]]) text(ctx, String(pts), at(v), y1 - 18, { size: 24, weight: 900, color: '#3a1a10' });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(at(STATION) - 2, y0 - 4, 4, y1 - y0 + 8);
+    ctx.globalAlpha = 1;
+  };
+
+  if (art === 'band') {
+    // The station and its zones, which only the DJ gets to see.
+    zones(0.35 + 0.25 * Math.sin(now / 300));
+    text(ctx, 'Only the DJ sees this', at(STATION), y0 - 50, { size: 26, weight: 800, color: '#ffc93c' });
+  } else if (art === 'clue') {
+    const pop = Math.min(1, Math.max(0, (t - 0.4) * 3));
+    if (pop > 0) {
+      ctx.globalAlpha = pop;
+      ctx.fillStyle = '#f2f4f8';
+      ctx.beginPath();
+      ctx.roundRect(cx - 150, y0 - 150, 300, 90, 24);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx - 20, y0 - 62);
+      ctx.lineTo(cx + 20, y0 - 62);
+      ctx.lineTo(cx, y0 - 36);
+      ctx.fill();
+      text(ctx, '“Salsa”', cx, y0 - 90, { size: 50, weight: 900, color: '#1a1420' });
+      ctx.globalAlpha = 1;
+    }
+  } else if (art === 'needles') {
+    const ms = [
+      [40 + 22 * Math.sin(t * 1.3), '#ff5a5f', 'M'],
+      [75 + 10 * Math.sin(t * 1.7 + 1), '#3fa7ff', 'T'],
+      [58 + 18 * Math.sin(t * 1.1 + 2), '#4cd97b', 'B'],
+    ];
+    ms.forEach(([v, c, l], i) => marker(v, c, l, y0 - 36 - i * 34));
+    needle(ms.reduce((a, m) => a + m[0], 0) / ms.length);
+    text(ctx, 'average', at(ms.reduce((a, m) => a + m[0], 0) / ms.length), y1 + 58, { size: 22, weight: 800, color: '#ff8c8c' });
+  } else if (art === 'score') {
+    const slide = Math.min(1, t / 1.4);
+    const v = 30 + (58.5 - 30) * (1 - (1 - slide) ** 3);
+    if (t > 1.6) zones(Math.min(1, (t - 1.6) * 3));
+    needle(v);
+    if (t > 2.1) text(ctx, '+3 Clear!', at(v), y0 - 46, { size: 34, weight: 900, color: ZONE_COLORS[1] });
+  }
+  ctx.restore();
 }
 
 function wrapText(ctx, str, x, y, maxW, opts) {

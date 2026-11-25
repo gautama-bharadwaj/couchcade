@@ -111,6 +111,16 @@
     #screen button:disabled { opacity: .4; }
     #screen .swatch { height: 72px; border-radius: 14px; display: flex; align-items: flex-end; padding: 8px 12px; box-shadow: inset 0 0 0 2px rgba(255,255,255,.25); }
     #screen .swatch span { font-weight: 800; font-size: .85rem; padding: 2px 8px; border-radius: 999px; background: rgba(13,15,20,.7); }
+    #screen .grid { display: grid; gap: 4px; }
+    #screen .gcell { position: relative; min-height: 54px; padding: 4px 2px 10px; border-radius: 8px; border: 0; font-weight: 800; font-size: .78rem; letter-spacing: -.02em; color: #2b2418; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); outline: 0 solid transparent; outline-offset: -3px; }
+    #screen .gcell .w { white-space: nowrap; max-width: 100%; overflow: hidden; line-height: 1.05; }
+    #screen .gcell .m { font-size: .55rem; font-weight: 800; text-transform: uppercase; opacity: .8; margin-top: 2px; }
+    #screen .gcell.dim, #screen .gcell.dim:disabled { opacity: .45; }
+    #screen .gcell:disabled { opacity: 1; }
+    #screen .gcell.ring { outline-width: 3px; }
+    #screen .gcell .dots { position: absolute; left: 3px; right: 3px; bottom: 3px; display: flex; gap: 2px; justify-content: center; }
+    #screen .gcell .dots i { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+    #screen .grid:not(.locked) .gcell:not(:disabled):active { transform: scale(.95); }
     #screen .wheel { display: flex; flex-direction: column; align-items: center; gap: 8px; }
     #screen .wheel canvas { touch-action: none; }
     #screen .nudges { display: grid; grid-template-columns: 1fr 1.6fr 1.6fr 1fr; gap: 6px; width: 100%; max-width: 380px; }
@@ -122,6 +132,34 @@
     #screen .dialLabels .r { color: #f0a070; text-align: right; }
     #screenFooter { min-height: 1.2em; }
     body.screens #hud { display: flex; }
+
+    /* How to play: the step the TV is showing (host can step or skip), and a sheet with every step
+       that anyone can open mid-game. */
+    #intro { flex-direction: column; gap: 14px; overflow-y: auto; }
+    #intro .kicker { color: var(--muted); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; font-size: .85rem; }
+    #intro h2 { margin: 0; font-size: 1.7rem; font-weight: 900; }
+    #intro p { margin: 0; font-size: 1.2rem; line-height: 1.4; }
+    .stepDots { display: flex; gap: 6px; }
+    .stepDots i { width: 8px; height: 8px; border-radius: 999px; background: var(--line); }
+    .stepDots i.on { width: 22px; background: #ffc93c; }
+    .stepDots i.done { background: #6b7390; }
+    #introHost { display: grid; gap: 10px; margin-top: auto; }
+    #introHost .row { display: flex; gap: 10px; }
+    #introHost .row button { flex: 1; }
+    .ghost { font-size: 1.05rem; font-weight: 700; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: transparent; color: inherit; }
+    .ghost:disabled { opacity: .35; }
+    #rulesBtn { position: fixed; left: max(12px, env(safe-area-inset-left)); top: max(8px, env(safe-area-inset-top)); display: none; z-index: 5; font-size: .85rem; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: #0d0f14; color: var(--muted); }
+    body.hasRules.playing #rulesBtn, body.hasRules.screens #rulesBtn { display: block; }
+    #rulesSheet { position: fixed; inset: 0; z-index: 15; display: none; flex-direction: column; gap: 12px; overflow-y: auto; background: #0d0f14;
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+    #rulesSheet.show { display: flex; }
+    #rulesSheet h2 { margin: 0; font-size: 1.5rem; font-weight: 900; }
+    #rulesSheet ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+    #rulesSheet li { padding: 10px 14px; border-radius: 12px; background: var(--panel); border-left: 4px solid #ffc93c; }
+    #rulesSheet li b { display: block; font-size: 1.05rem; }
+    #rulesSheet li span { color: #c9cfdc; font-size: .98rem; line-height: 1.35; }
+    #rulesSheet .acts { display: grid; gap: 8px; margin-top: 4px; }
+    body:not(.host) #rulesTvBtn { display: none; }
 
     #conn { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: .8rem; color: var(--muted); pointer-events: none; }
 
@@ -168,6 +206,21 @@
     <div id="screenFooter" class="muted"></div>
   </section>
 
+  <section id="intro" class="screen">
+    <div class="kicker" id="introKicker"></div>
+    <div class="stepDots" id="introDots"></div>
+    <h2 id="introTitle"></h2>
+    <p id="introText"></p>
+    <div id="introGuest" class="muted"></div>
+    <div id="introHost">
+      <div class="row">
+        <button id="introBack" class="ghost">‹ Back</button>
+        <button id="introNext" class="ghost">Next ›</button>
+      </div>
+      <button id="introSkip" class="primary">Skip rules, start playing</button>
+    </div>
+  </section>
+
   <section id="results" class="screen">
     <div id="resTitle"></div>
     <ol id="resList"></ol>
@@ -176,6 +229,15 @@
 
   <div id="hud"><span class="dot"></span><span id="who"></span><span id="hudStatus"></span></div>
   <button id="endBtn">End game</button>
+  <button id="rulesBtn">? Rules</button>
+  <section id="rulesSheet">
+    <h2 id="rulesSheetTitle">How to play</h2>
+    <ol id="rulesList"></ol>
+    <div class="acts">
+      <button id="rulesTvBtn" class="ghost">Replay on the TV</button>
+      <button id="rulesClose" class="primary">Back to the game</button>
+    </div>
+  </section>
   <div id="conn"></div>
   <div id="rotate">↻<br />Turn your phone sideways</div>
 

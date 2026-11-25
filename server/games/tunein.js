@@ -26,7 +26,7 @@ export function zoneFor(d) {
   return ZONES.find((z) => d <= z.within) ?? { within: Infinity, pts: 0, label: 'Static' };
 }
 
-const T = { rules: 25, pick: 25, clue: 75, tune: 60, reveal: 10 };
+const T = { pick: 25, clue: 75, tune: 60, reveal: 10 };
 const AWAY_S = 4; // a DJ whose phone dropped gets an automatic clue after this long
 const MAX_CLUE = 40;
 
@@ -47,6 +47,13 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip). Drawn by drawRules in public/tv/games/tunein.js.
+  rules: [
+    { art: 'band', title: 'Find the secret station', text: 'Each card is a band between two opposite ideas. Each turn one player is the DJ, and only the DJ sees where the station is.' },
+    { art: 'clue', title: 'The DJ gives a clue', text: 'Something that sits right at that spot. "Salsa" might be just past the middle of Bland to Spicy. No numbers!' },
+    { art: 'needles', title: 'Everyone else tunes in', text: "Drag your own needle on your phone. The red needle is everyone's average, so talk it out, then lock in." },
+    { art: 'score', title: 'Closer is better', text: 'Crystal clear 4, Clear 3, Crackly 2. The whole crew shares the points, and your own needle scores for you.' },
+  ],
 
   create({ players }) {
     const roster = shuffle([...players.values()].filter((p) => p.connected).map((p) => p.id));
@@ -63,11 +70,10 @@ export default {
     let acc = 0;
     const st = {
       turn: -1,
-      phase: 'rules', // rules → (pick → clue → tune → reveal) × turns
-      left: T.rules,
+      phase: 'pick', // (pick → clue → tune → reveal) × turns
+      left: 0,
       phaseAt: 0,
       seq: 0,
-      ready: new Set(),
       dj: null,
       offers: [], // two cards the DJ can choose between
       card: null,
@@ -156,7 +162,7 @@ export default {
     // ---- Bots ---------------------------------------------------------------------
     const botAt = new Map(); // id -> when it next acts
     function scheduleBots() {
-      const [lo, hi] = { rules: [2, 5], pick: [2, 4], clue: [3, 6], tune: [3, 10], reveal: [99, 99] }[st.phase];
+      const [lo, hi] = { pick: [2, 4], clue: [3, 6], tune: [3, 10], reveal: [99, 99] }[st.phase];
       for (const id of roster) if (isBot(id)) botAt.set(id, clock + lo + Math.random() * (hi - lo));
     }
 
@@ -165,8 +171,7 @@ export default {
         if (!isBot(id) || clock < (botAt.get(id) ?? Infinity)) continue;
         botAt.set(id, Infinity);
         const dj = id === st.dj;
-        if (st.phase === 'rules') api.onAction(id, { key: 'ready' });
-        else if (dj && st.phase === 'pick') api.onAction(id, { key: 'pick', value: String(Math.floor(Math.random() * 2)) });
+        if (dj && st.phase === 'pick') api.onAction(id, { key: 'pick', value: String(Math.floor(Math.random() * 2)) });
         else if (dj && st.phase === 'clue') giveClue(botClue(st.card, st.station), { trusted: true });
         else if (!dj && st.phase === 'tune') {
           if (!st.needle.has(id)) {
@@ -196,21 +201,6 @@ export default {
       const isDj = id === st.dj;
       const head = `Turn ${st.turn + 1} of ${djs.length}`;
       const timer = `${head} · ${st.left}s`;
-
-      if (st.phase === 'rules') {
-        const ready = st.ready.has(id);
-        return {
-          title: 'How to play Tune In',
-          lines: [
-            'Each turn one player is the DJ. Only the DJ sees where the secret station is, somewhere between two opposite ideas.',
-            'The DJ gives a clue: a thing that sits at that spot. "Salsa" might be just past the middle of Bland to Spicy.',
-            'Everyone else drags their own needle. The big needle on the TV is everyone\'s average, so talk it out!',
-            'Closer is better: Crystal clear 4, Clear 3, Crackly 2. The crew shares the points.',
-          ],
-          actions: ready ? [] : [{ key: 'ready', label: 'Got it' }],
-          footer: ready ? `Waiting for the others… ${st.left}s` : `${st.left}s`,
-        };
-      }
 
       if (st.phase === 'reveal') {
         const r = st.reveal.rows.find((x) => x.id === id);
@@ -287,9 +277,6 @@ export default {
         botThink();
         const djAway = st.dj && !connected(st.dj) && clock - st.phaseAt > AWAY_S;
         switch (st.phase) {
-          case 'rules':
-            if (st.left <= 0 || roster.filter(connected).every((id) => st.ready.has(id))) nextTurn();
-            break;
           case 'pick':
             if (st.left <= 0 || djAway) choose(Math.floor(Math.random() * 2));
             break;
@@ -309,7 +296,6 @@ export default {
 
       onAction(id, { key, value }) {
         if (st.over || !score.has(id)) return;
-        if (key === 'ready' && st.phase === 'rules') return void st.ready.add(id);
         if (id === st.dj) {
           if (key === 'pick' && st.phase === 'pick' && (value === '0' || value === '1')) choose(Number(value));
           else if (key === 'clue' && st.phase === 'clue' && value) st.error = giveClue(value);
@@ -340,7 +326,6 @@ export default {
           crowd: st.phase === 'tune' || st.phase === 'reveal' ? (st.reveal?.crowd ?? crowd()) : null,
           needles: [...st.needle].map(([id, value]) => ({ id, value })),
           locked: [...st.locked],
-          ready: [...st.ready],
           crew: st.crew,
           maxCrew: djs.length * ZONES[0].pts,
           history: st.history.map((h) => h.pts),
@@ -362,6 +347,7 @@ export default {
       },
     };
 
+    nextTurn();
     return api;
   },
 };

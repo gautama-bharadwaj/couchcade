@@ -65,6 +65,16 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip). Drawn by drawRules in public/tv/games/fuse.js.
+  rules: [
+    { art: 'goal', title: 'Last one standing wins', text: "Bombs hide in the crate. Draw one and you're out." },
+    { art: 'turn', title: 'Your turn', text: 'Play any cards you like, or none. Then draw one from the crate to end your turn.' },
+    { art: 'bucket', title: 'Drew a Bomb? Use a Bucket', text: 'Douse it, then hide the Bomb back in the crate, anywhere you like. Everyone starts with one.' },
+    { art: 'wires', title: 'No Bucket? Cut a wire', text: 'One of the three wires defuses it. The other two… boom.' },
+    { art: 'dodge', title: 'Dodge the draw', text: 'Duck skips your draw. Hot Potato skips it and makes the next player draw twice. Boomerang sends that back.' },
+    { art: 'peek', title: 'Know the crate', text: 'Periscope and Nudge peek at the top. Decoys look like Bombs, but only go pop.' },
+    { art: 'phone', title: 'Your cards are on your phone', text: 'Tap one to see what it does. The TV lists them all on the left.' },
+  ],
 
   create({ players }) {
     const order = shuffle([...players.values()].filter((p) => p.connected).map((p) => p.id));

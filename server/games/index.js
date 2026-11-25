@@ -13,6 +13,7 @@
 //     controller: { buttons: [{ id: 'a', label: 'Dash' }] },   // phone layout: joystick + up to 2 buttons (a, b)
 //              or { type: 'screens' },                          // phone shows the game's own screens (see below)
 //     create(ctx) -> instance,                                 // ctx = { players: Map<id, Player>, arena }
+//     rules?: [{ title, text, art?, seconds? }],               // how-to-play intro (see "Rules" below)
 //   }
 //   instance = {
 //     update(dt),            // advance the simulation; read player.input {x, y, a, b}
@@ -58,9 +59,23 @@
 //       locked?: true, small?: true,       // locked = view only; small = a short reference copy
 //     },                                   // (drawn after cards, before choose; ←/→ nudge 1, ↑/↓ nudge 5)
 //                                          // changes to value / crowd / pins redraw in place, so drags aren't cut off
+//     grid: {                              // tappable word/tile grid; sends { key, value: cell.id }
+//       key: 'tile', cols: 5, locked?,     // locked = view only
+//       cells: [{ id, label, color?, ink?, // ink = text color
+//                 mark?, dots?: [color],   // mark = small caption; dots = little voter markers
+//                 ring?, dim?, disabled? }],// ring = outline color (your pick)
+//     },                                   // (drawn after input, before the wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
 //   }
+//
+// Rules (optional): a short how-to-play intro, played on the TV when the game starts, for about
+// 30–60 s in all. Each step is a title and a sentence or two (the narrator reads them, the phones
+// show them too). `seconds` defaults to reading time. The game is paused while it plays; the host
+// can skip it or step through it, and replay it mid-game (phone "Rules" button, R on the TV).
+// `art` is a name passed to the TV renderer's optional drawRules(ctx, art, t, box) to animate the
+// step (t = seconds into the step, box = { x, y, w, h } to draw in); without it, text only.
+//
 // The phone re-renders only when the screen changes, and gets a fresh view right after any action.
 // Never trust an action: check the phase, the player and the value in onAction.
 
@@ -73,11 +88,12 @@ import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import tint from './tint.js';
+import hoard from './hoard.js';
 import tunein from './tunein.js';
 import sandbox from './sandbox.js';
 
 // Order within each tab is the order here. The first Board & Card game is picked when the server starts.
-export const GAMES = [shed, fuse, gala, tint, tunein, stickup, bumper, sumo, potato, pillowfort, sandbox];
+export const GAMES = [shed, fuse, gala, tint, hoard, tunein, stickup, bumper, sumo, potato, pillowfort, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 

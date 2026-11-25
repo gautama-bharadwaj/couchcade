@@ -75,7 +75,9 @@ Flags work with the downloads, `npx couchcade` and `npm start --`; `couchcade --
 
 The game picker has two tabs: **Board & Card** (turn-based games on your phone's screen, the default) and **Arcade** (real-time joystick games like Stickup).
 
-TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **Tab** switches between Board & Card and Arcade, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one).
+Games with a how-to-play intro (Fuse so far) open with a short animated walkthrough on the TV, under a minute, while the game waits. Every phone shows the same step; the host can step through it or tap **Skip rules** if everyone already knows the game. Mid-game, the **? Rules** button on any phone lists the rules again, and the host can replay the intro on the TV from there (or press **R** on the TV).
+
+TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **Tab** switches between Board & Card and Arcade, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one). During a how-to-play intro: **S**, **Esc** or **Enter** skip it, **←/→** step through it; **R** replays it mid-game.
 
 ### Sound
 
@@ -83,7 +85,7 @@ The TV plays synthesized sound effects and a narrator using the browser's built-
 
 ### Playing with bots
 
-The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Fuse they peek before risky draws and love hiding Bombs on top for the next player; in Bumper Arena they chase and shove, in Stickup they grab weapons and fight, in Sumo Spin they charge, lunge and sometimes dodge; in Hot Potato Pileup they chase with the bomb, flee, hop over tackles and shove each other toward it; in Pillow Fort Siege they ferry cushions into a stepped fort, then lob pillows at the other teddy while one stays home to patch the walls; in Tint & Tell they clue and guess from a list of about 100 everyday words like "lagoon" or "deep plum", so they may miss your more creative clues; in Tune In they give plain clues like "Leaning: Spicy" and, for your clues, lean toward where the people are tuning; in Sandbox they stand still).
+The host can tap **+ Add bot** / **− Remove bot** in the lobby (or press **B** / **Shift+B** on the TV) to fill seats with computer players. Bots play every game (in Fuse they peek before risky draws and love hiding Bombs on top for the next player; in Bumper Arena they chase and shove, in Stickup they grab weapons and fight, in Sumo Spin they charge, lunge and sometimes dodge; in Hot Potato Pileup they chase with the bomb, flee, hop over tackles and shove each other toward it; in Pillow Fort Siege they ferry cushions into a stepped fort, then lob pillows at the other teddy while one stays home to patch the walls; in Tint & Tell they clue and guess from a list of about 100 everyday words like "lagoon" or "deep plum", so they may miss your more creative clues; in Dragon Hoard a bot Keeper clues with themes like "kitchen 2" and bot Seekers only vote when no human is seeking for their team, so one human with bots always gets to guess; in Tune In they give plain clues like "Leaning: Spicy" and, for your clues, lean toward where the people are tuning; in Sandbox they stand still).
 
 ### Testing without phones
 
@@ -102,6 +104,7 @@ Open `http://localhost:3000/` in a few **different browsers or private windows**
 | **Shed!** | Phone screens | Color-matching card game for 2–8. Your hand is on your phone; match the top card's color or number, use Skip / Reverse / Draw 2 / Wilds, stack +2s and +4s to pass the penalty along, and tap "Last card!" before someone catches you. 108-card deck, 7 each. |
 | **Pillow Fort Siege** | Joystick + Jump + Grab/Throw | Two teams (2–8 players) and a teddy bear in each fort. **Build** (35 s): grab cushions from the laundry pile in the middle and press B to stack one on the column in front of you (the TV shows where it'll land). **Siege** (75 s): hold B to wind up a pillow, aim with the stick (the TV draws the arc) and let go. Two pillows knock a cushion out and the stack above drops; a carried cushion hurled from outside your fort knocks one out at once. Pillows fly through your own fort and bonk enemies, making them drop what they carry. Hit the other teddy to win the round, or have the bigger fort when time runs out. First team to 2 rounds. Sound effects only. |
 | **Tint & Tell** | Phone screens | Color-clue party game for 2–8 around a big color wheel (24 hues by 6 rings, palest in the middle). The Teller picks one of three secret swatches on their phone and gives a one-word clue (no color names); everyone taps a swatch on their phone's wheel and locks in. Then a two-word clue, and everyone can move their pin or keep it. Score by steps away (one swatch around or one ring in/out): on it 4, 1 step 3, 2 steps 2, 3 steps 1, plus 1 for keeping your first pin and landing within a step. The Teller scores the best guess. Everyone tells once (twice with 2–3 players). |
+| **Dragon Hoard** | Phone screens | Team word-clue game for 4–10 (co-op for 2–3). 25 words on the TV, each hiding an Ember gem, a Frost gem, dust or the sleeping dragon. Each team's Keeper sees the key on their phone and types one word and a number ("ocean 3"); teammates talk it over and vote on their phones, and a word turns over when most of them agree. Your gem: keep going, up to the number plus one. Dust or their gem ends the turn; the dragon loses the game. First team to find all its gems wins. In co-op, find 9 gems in 8 clues. 621 words. |
 | **Tune In** | Phone screens | Co-op radio-dial party game for 2–8. Each card is a band between two opposite ideas (Bland ↔ Spicy), with a secret station somewhere on it. The DJ sees where it is, picks one of two cards and gives a clue (no numbers); everyone else drags their own needle on their phone, and the red needle on the TV is the average of all of them, so talk it out. Within 3 of the station is Crystal clear (4), within 8 Clear (3), within 13 Crackly (2). The crew shares the points; your own needle also scores for you. 436 original cards, and none repeats until the whole deck has been used while the server runs. |
 | Sandbox | Joystick + Boost | Steer a dot around. For testing controllers and latency. |
 
@@ -129,7 +132,7 @@ server/
   runtime.js          packaged app or source? (node:sea), opening the browser
   log.js              buffered, leveled logging (see Logging)
   lobby.js            who's here
-  session.js          shared game flow (pick, start, results)
+  session.js          shared game flow (pick, start, how-to-play intro, results)
   arena.js            1600x900 logical canvas shared by all games
   games/index.js      game registry + the game contract (read this first)
   games/bumper.js
@@ -138,6 +141,7 @@ server/
   games/sandbox.js
 public/
   tv/tv.js            TV core: lobby/results screens, interpolation, render loop
+  tv/rules.js         the how-to-play overlay (steps come from each game's `rules`)
   tv/games/index.js   TV renderer registry
   tv/games/<id>.js    how each game is drawn
   controller/         phone UI: join, lobby, pad (buttons come from the game), results
