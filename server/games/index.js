@@ -32,9 +32,10 @@
 //     title: 'Night 2',                    // big heading
 //     tag: { label: 'Thief', color },      // badge, e.g. a secret role
 //     swatch: { color, label? },           // a big block of one color (a secret color, say)
-//     hero: { art, flip?, small?, key? }, // a big illustrated card drawn by the art module's drawHero
+//     hero: { art, flip?, small?, key? }, // a big illustrated card: art.drawHero(g, name, x, y, w, h)
 //                                          //   (a secret role, say); flip = turn over from drawHeroBack
-//                                          //   the first time it shows (per key, default art).
+//                                          //   the first time it shows (per key, default art);
+//                                          //   the back is art.drawHeroBack(g, x, y, w, h).
 //                                          //   Needs `art` on the screen.
 //     lines: ['You are in the Library.'],  // paragraphs
 //     cards: [{ label, sub?, color? }],    // read-only info tiles (clues, who you saw…)
@@ -80,7 +81,7 @@
 //       cells: [{ id, label, color?, ink?, // ink = text color
 //                 mark?, dots?: [color],   // mark = small caption; dots = little voter markers
 //                 ring?, dim?, disabled?,  // ring = outline color (your pick)
-//                 art? }],                 // art = a drawn tile behind the word (art module's drawCell)
+//                 art? }],                 // art = a drawn tile behind the word: art.drawCell(g, art, w, h, cell)
 //     },                                   // (drawn after input, before the wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
@@ -93,8 +94,6 @@
 //   drawCard(g, name, x, y, w, h, count)     a playing card (a locked tally shows these)
 //   mapTile(g, art, x, y, r, seed), mapPiece(g, art, x, y, k, color), mapRoad(g, x1, y1, x2, y2,
 //   color, k), mapHarbor(g, x, y, k, art), mapCover(g, x, y, r)   pictures for the hexmap
-//   drawHero(g, name, x, y, w, h), drawHeroBack(g, x, y, w, h)   the big card of a screen's `hero`
-//   drawCell(g, art, w, h, cell)             a grid cell's background (cells with `art`), w x h from (0, 0)
 // Then these fields draw with it: tally rows `art`; choose options `art`, `artColor`, and
 // `costs: [names]` (a row of icons); cards `art`, `artColor`, `icons: [names]`; hexmap tiles,
 // buildings and harbors `art`. Until the module loads (or if it fails) the labels show, so keep
