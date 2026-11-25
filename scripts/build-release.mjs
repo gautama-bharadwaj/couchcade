@@ -123,6 +123,8 @@ console.log(`Smoke test it with: node scripts/smoke.mjs --cmd ${path.relative(RO
 /**
  * A minimal .app: Info.plist plus the executable. It has no window of its own; double-clicking
  * starts the server and opens the TV page in the default browser (see server/runtime.js).
+ * NSAppSleepDisabled: with no window, macOS's App Nap would otherwise slow its timers once the
+ * browser is in front, and the game's ticks and turn timers would stutter.
  */
 function makeMacApp(binary, zipPath) {
   const app = path.join(DIST, 'Couchcade.app');
@@ -145,6 +147,7 @@ function makeMacApp(binary, zipPath) {
   <key>CFBundleVersion</key><string>${pkg.version}</string>
   <key>LSMinimumSystemVersion</key><string>13.5</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSAppSleepDisabled</key><true/>
 </dict>
 </plist>
 `,

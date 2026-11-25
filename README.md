@@ -77,7 +77,7 @@ The game picker has two tabs: **Board & Card** (turn-based games on your phone's
 
 Games with a how-to-play intro (Fuse so far) open with a short animated walkthrough on the TV, under a minute, while the game waits. Every phone shows the same step; the host can step through it or tap **Skip rules** if everyone already knows the game. Mid-game, the **? Rules** button on any phone lists the rules again, and the host can replay the intro on the TV from there (or press **R** on the TV).
 
-TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **Tab** switches between Board & Card and Arcade, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** end the game or skip the results, **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one). During a how-to-play intro: **S**, **Esc** or **Enter** skip it, **←/→** step through it; **R** replays it mid-game.
+TV keyboard shortcuts: **arrow keys** pick a game (or click a tile), **Tab** switches between Board & Card and Arcade, **B** add a bot (**Shift+B** removes one), **Enter** start, **M** mute, **N** narrator on/off, **Esc** twice ends the game (once skips the results), **F** full screen, **J** show a join QR code during a game, **L** latency overlay, **I** switch the join address (when the computer has more than one). During a how-to-play intro: **S**, **Esc** or **Enter** skip it, **←/→** step through it; **R** replays it mid-game.
 
 ### Sound
 

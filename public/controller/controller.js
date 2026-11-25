@@ -7,6 +7,8 @@
 // Desktop testing: open http://localhost:3000 and use WASD / arrows to move,
 // Space = A, Shift = B. Use different browsers/private windows for more players.
 
+import * as keepAwake from './keepawake.js';
+
 const $ = (id) => document.getElementById(id);
 const HEARTBEAT_HZ = 30; // resend the current input at least this often (keeps Wi-Fi awake too)
 const STICK_MIN_MS = 15; // joystick moves are sent at most ~60/s; button changes go out at once
@@ -32,16 +34,20 @@ function join() {
 }
 
 function connect() {
+  if (ws && ws.readyState === WebSocket.CONNECTING) return; // already on its way
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   $('conn').textContent = 'connecting…';
+  setOffline(true);
 
   ws.onopen = () => {
     $('conn').textContent = '';
+    setOffline(false);
     ws.send(JSON.stringify({ t: 'hello', role: 'player', name: localStorage.getItem('cc.name') ?? '', token: localStorage.getItem('cc.token') }));
     rtt = null;
   };
 
   ws.onmessage = (ev) => {
+    lastHeardAt = performance.now();
     const msg = JSON.parse(ev.data);
     switch (msg.t) {
       case 'welcome':
@@ -53,6 +59,7 @@ function connect() {
         break;
       case 'phase':
         phase = msg;
+        if (msg.phase === 'lobby') keepAwake.stop();
         if (me) render();
         break;
       case 'you':
@@ -79,13 +86,49 @@ function connect() {
     if (ev.code === 4000) return void ($('conn').textContent = 'opened on another tab/phone');
     if (!joined) return;
     $('conn').textContent = 'reconnecting…';
+    setOffline(true);
     setTimeout(connect, 800);
   };
 }
 
+// While the connection is down, the screen is greyed out under a "Reconnecting…" banner, so taps
+// aren't wasted on buttons that can't reach the server.
+function setOffline(off) {
+  document.body.classList.toggle('offline', off && joined);
+}
+
+// Back from a locked screen or another app. The old connection may still say "open" although it
+// died while the phone slept (iPhones especially), and taps would vanish until the server's
+// 5-second check noticed. So ask the server right away, and start a new connection if it
+// doesn't answer quickly. The server gives the same seat back (the token), mid-game too.
+let lastHeardAt = 0;
+const WAKE_CHECK_MS = 1500;
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && joined && ws?.readyState !== WebSocket.OPEN) connect();
+  if (document.visibilityState !== 'visible' || !joined) return;
+  if (ws?.readyState !== WebSocket.OPEN) return connect();
+  const sock = ws;
+  const askedAt = performance.now();
+  sock.send(JSON.stringify({ t: 'ping', at: askedAt, rtt }));
+  setTimeout(() => {
+    if (ws !== sock || lastHeardAt >= askedAt) return; // it answered (or was replaced already)
+    sock.onclose = sock.onmessage = null; // a dead socket can take long to report its close
+    try {
+      sock.close();
+    } catch {}
+    $('conn').textContent = 'reconnecting…';
+    connect();
+  }, WAKE_CHECK_MS);
 });
+
+// Every tap during a game keeps the screen awake (browsers only allow starting that from a tap),
+// and in action games a tap also asks for full screen on Android (also tap-only).
+document.addEventListener('pointerdown', () => {
+  if (!joined || !phase || phase.phase === 'lobby') return;
+  keepAwake.start();
+  if (document.body.classList.contains('playing') && !document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(() => {}); // iPhone has no page full screen; Add to Home Screen instead
+  }
+}, { capture: true, passive: true });
 
 // Script errors go to the server log (a few per minute at most) so phone problems can be debugged
 // without plugging the phone into a computer.
@@ -133,7 +176,6 @@ function render() {
     buildButtons(phase.controller);
     $('hudStatus').textContent = '';
     show('pad');
-    document.documentElement.requestFullscreen?.().catch(() => {}); // Android; iPhone uses Add to Home Screen
   } else if (phase.phase === 'results') {
     renderResults(phase.results);
     show('results');
@@ -224,7 +266,26 @@ function renderResults(results) {
 $('startBtn').addEventListener('click', () => cmd({ t: 'start' }));
 $('addBotBtn').addEventListener('click', () => cmd({ t: 'addBot' }));
 $('removeBotBtn').addEventListener('click', () => cmd({ t: 'removeBot' }));
-$('endBtn').addEventListener('click', () => cmd({ t: 'end' }));
+// Ending is for everyone and can't be undone (a long board game would be lost), so it takes a
+// second tap: the first turns the button into a red "End for everyone?" for a few seconds.
+let endArmedTimer = 0;
+$('endBtn').addEventListener('click', () => {
+  const btn = $('endBtn');
+  if (!btn.classList.contains('armed')) {
+    btn.classList.add('armed');
+    btn.textContent = 'End for everyone?';
+    clearTimeout(endArmedTimer);
+    endArmedTimer = setTimeout(disarmEnd, 4000);
+    return;
+  }
+  disarmEnd();
+  cmd({ t: 'end' });
+});
+function disarmEnd() {
+  clearTimeout(endArmedTimer);
+  $('endBtn').classList.remove('armed');
+  $('endBtn').textContent = 'End game';
+}
 
 // --- How to play ------------------------------------------------------------------
 // While the TV plays a game's rules, every phone shows the same step; the host can step or skip.
