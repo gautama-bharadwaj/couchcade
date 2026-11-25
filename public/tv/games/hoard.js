@@ -268,8 +268,8 @@ export default {
       const mx = DRAGON.hx + hs * 0.62;
       const my = headY + hs * 0.12;
       const q = (tnow - wakeAt - 300) / 2300;
-      const aim = -0.55 + q * 0.6; // sweeps across the board
-      for (let i = 0; i < 6; i++) emit(mx, my, 1, ['#ff6a2a', '#ffb040', '#fff1b0'][i % 3], { angle: aim, spread: 0.35, speed: 16, life: 1100, size: 16, kind: 'fire', grav: -0.02 });
+      const aim = -0.28 + q * 0.42; // sweeps across the board
+      for (let i = 0; i < 7; i++) emit(mx, my, 1, ['#ff3a10', '#ff7a1a', '#ffb030', '#ffe070'][i % 4], { angle: aim, spread: 0.22, speed: 20, life: 1000, size: 14, kind: 'fire', grav: -0.01 });
       ctx.fillStyle = `rgba(255,80,30,${0.18 * Math.sin(Math.min(1, q) * Math.PI)})`;
       ctx.fillRect(0, 0, W, H);
     }
@@ -473,10 +473,13 @@ function drawParts(ctx, tnow) {
       ctx.arc(x, y, p.size * (0.6 + q * 1.4), 0, Math.PI * 2);
       ctx.fill();
     } else if (p.kind === 'fire') {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = (1 - q) * 0.7;
       ctx.fillStyle = p.color;
       ctx.beginPath();
       ctx.arc(x, y, p.size * (0.5 + q * 1.6), 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
     } else sparkle(ctx, x, y, p.size * 1.6, p.color);
   }
   ctx.globalAlpha = 1;
