@@ -121,8 +121,10 @@ console.log(`\nBuilt ${path.relative(ROOT, artifact)} (Couchcade ${pkg.version},
 console.log(`Smoke test it with: node scripts/smoke.mjs --cmd ${path.relative(ROOT, platform === 'darwin' ? path.join(DIST, 'Couchcade.app', 'Contents', 'MacOS', 'couchcade') : artifact)}`);
 
 /**
- * A minimal .app: Info.plist plus the executable. It has no window of its own; double-clicking
- * starts the server and opens the TV page in the default browser (see server/runtime.js).
+ * A minimal .app: Info.plist plus the executable. Double-clicking starts the server, opens the
+ * TV page in the default browser and shows a small native dialog with the addresses and a Quit
+ * button (showMacWindow in server/runtime.js). LSUIElement keeps it out of the Dock: the
+ * executable isn't a Cocoa app, so a Dock icon would only bounce and never answer Quit.
  */
 function makeMacApp(binary, zipPath) {
   const app = path.join(DIST, 'Couchcade.app');
@@ -138,13 +140,14 @@ function makeMacApp(binary, zipPath) {
 <dict>
   <key>CFBundleName</key><string>Couchcade</string>
   <key>CFBundleDisplayName</key><string>Couchcade</string>
-  <key>CFBundleIdentifier</key><string>io.github.gautama-bharadwaj.couchcade</string>
+  <key>CFBundleIdentifier</key><string>io.github.gautama-bharadwaj.couchcade</string><!-- also in server/runtime.js -->
   <key>CFBundleExecutable</key><string>couchcade</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${pkg.version}</string>
   <key>CFBundleVersion</key><string>${pkg.version}</string>
   <key>LSMinimumSystemVersion</key><string>13.5</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>LSUIElement</key><true/>
 </dict>
 </plist>
 `,

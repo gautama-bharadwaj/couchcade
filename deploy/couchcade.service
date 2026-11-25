@@ -1,0 +1,26 @@
+# Couchcade as a systemd service, for a Linux home server (see "Home server" in the README).
+#
+#   sudo cp deploy/couchcade.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now couchcade
+#   journalctl -u couchcade -f       see the addresses and the log
+#
+# ExecStart runs the Linux download installed as /usr/local/bin/couchcade (no Node.js needed).
+# With Node.js 20+ instead: `sudo npm install -g couchcade` and use the path `command -v couchcade` prints.
+
+[Unit]
+Description=Couchcade party games
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/couchcade --port 3000 --no-open
+# Log to the journal instead of a file.
+Environment=LOG_FILE=off
+# Uncomment if the QR code shows the wrong address:
+# Environment=HOST_IP=192.168.1.50
+DynamicUser=yes
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

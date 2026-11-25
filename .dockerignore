@@ -5,3 +5,5 @@ dist
 logs
 *.log
 .DS_Store
+deploy
+docker-compose.yml

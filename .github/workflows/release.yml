@@ -1,6 +1,7 @@
-# Builds the downloadable apps and attaches them to a GitHub Release.
+# Builds the downloadable apps and attaches them to a GitHub Release, then publishes the same
+# version to npm (for `npx couchcade`).
 #
-#   git tag v0.2.0 && git push origin v0.2.0    build all platforms and publish the release
+#   git tag v0.2.0 && git push origin v0.2.0    build all platforms, publish the release and npm
 #   Actions > Release > Run workflow            build only; download the files from the run
 #
 # Each platform builds on its own runner (a single executable embeds that platform's Node),
@@ -35,6 +36,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          [ "$v" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json ($v). Use npm version to bump and tag together."; exit 1; }
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -99,3 +106,38 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Couchcade $TAG" --notes "$notes" --generate-notes
           fi
           gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  # npm, for `npx couchcade`. Needs a repository secret NPM_TOKEN: an npm granular access token
+  # with read and write access to the couchcade package (Settings > Secrets and variables > Actions).
+  # Without it this job skips with a warning, so a release never fails over npm.
+  npm:
+    name: Publish to npm
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance: links the package to this repository and workflow run
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::warning::No NPM_TOKEN secret, so not publishing to npm."
+            exit 0
+          fi
+          v="$(node -p "require('./package.json').version")"
+          if npm view "couchcade@$v" version > /dev/null 2>&1; then
+            echo "couchcade@$v is already on npm."
+            exit 0
+          fi
+          npm publish --provenance --access public

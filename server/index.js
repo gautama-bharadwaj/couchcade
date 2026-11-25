@@ -8,7 +8,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { log } from './log.js';
 import { joinAddresses } from './address.js';
-import { PACKAGED, SEA, openBrowser } from './runtime.js';
+import { MAC_WINDOW, PACKAGED, SEA, openBrowser, showMacAlert, showMacWindow } from './runtime.js';
 import { Lobby, MAX_PLAYERS } from './lobby.js';
 import { Session } from './session.js';
 import { ARENA } from './arena.js';
@@ -545,7 +545,7 @@ async function start() {
         : PORT_SET ? `port ${PORT} is already in use (is Couchcade already running?). Close that or pick another port, e.g. --port 3100.`
         : `ports ${PORT}-${PORT + PORT_TRIES - 1} are all in use (is Couchcade already running?). Close that or pick a port, e.g. --port 3100.`;
       log.error('server', why);
-      return exitAfterStartupError();
+      return exitAfterStartupError(why);
     }
   }
   server.on('error', (err) => {
@@ -574,20 +574,25 @@ async function start() {
   }
   lines.push(
     `  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more)${LOG_API_OFF ? '' : ` · http://localhost:${port}/api/logs`}`,
-    '  Quit:        press Ctrl+C, or close this window.',
+    MAC_WINDOW ? '  Quit:        click Quit Couchcade in its window.' : '  Quit:        press Ctrl+C, or close this window.',
     '',
   );
   console.log(lines.join('\n'));
   log.info('server', `started on ${joinUrl} at ${TICK_HZ} ticks/s, node ${process.version}${PACKAGED ? ' (packaged)' : ''}`);
   if (OPEN_BROWSER) openBrowser(tvUrl);
+  if (MAC_WINDOW) showMacWindow({ tvUrl, joinUrl, onQuit: () => stop('Quit in the app window') });
 }
 start().catch((err) => {
   log.error('server', 'startup failed', err);
-  exitAfterStartupError();
+  exitAfterStartupError(`startup failed: ${err.message}`);
 });
 
-function exitAfterStartupError() {
+async function exitAfterStartupError(why) {
   log.flushSync();
+  if (MAC_WINDOW) {
+    await showMacAlert("Couchcade couldn't start", `${why[0].toUpperCase()}${why.slice(1)}\n\nLog: ${log.file ?? 'none'}`);
+    process.exit(1);
+  }
   // A double-clicked .exe closes its console window on exit, taking the reason with it.
   if (PACKAGED && process.stdin.isTTY) {
     console.log('\n  Press Enter to close this window.');
@@ -606,10 +611,9 @@ process.on('unhandledRejection', (err) => {
   const n = log.every('unhandled-rejection', 10_000);
   if (n) log.error('server', 'unhandled promise rejection', err instanceof Error ? err : String(err));
 });
-for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => {
-    log.info('server', `stopping (${sig})`);
-    log.flushSync();
-    process.exit(0);
-  });
+function stop(why) {
+  log.info('server', `stopping (${why})`);
+  log.flushSync();
+  process.exit(0);
 }
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => stop(sig));
