@@ -262,6 +262,7 @@ function renderScreen(screen) {
     wrap.append(sw);
   }
   for (const line of screen.lines ?? []) wrap.append(el('p', '', line));
+  if (screen.tally) wrap.append(buildTally(screen.tally, el));
 
   if (screen.cards?.length) {
     const cards = el('div', 'cards');
@@ -328,6 +329,8 @@ function renderScreen(screen) {
     wrap.append(row);
   }
 
+  if (screen.hexmap) wrap.append(buildHexmap(screen.hexmap, el));
+
   if (screen.wheel) wrap.append(buildWheel(screen.wheel, el));
   else wheelNudge = null;
 
@@ -341,6 +344,183 @@ function renderScreen(screen) {
     }
     wrap.append(acts);
   }
+}
+
+// Counters (see "tally" in server/games/index.js): groups of resource-style chips, each with
+// − and + buttons unless locked. Sends { key, value: 'group:row:+' } (or '-').
+function buildTally(t, el) {
+  const { key, groups = [], locked = false } = t;
+  const box = el('div', 'tally');
+  for (const g of groups) {
+    if (g.title) box.append(el('div', 'tt', g.title));
+    const row = el('div', 'trow');
+    for (const r of g.rows ?? []) {
+      const cell = el('div', `tcell${r.value ? '' : ' zero'}`);
+      if (r.color) cell.style.setProperty('--c', r.color);
+      const mk = (dir, label, disabled) => {
+        const b = el('button', 'tbtn', label);
+        b.disabled = disabled;
+        b.addEventListener('click', () => act(key, `${g.id}:${r.id}:${dir}`));
+        return b;
+      };
+      if (!locked) cell.append(mk('+', '+', r.max != null && r.value >= r.max));
+      const face = el('div', 'tface');
+      face.append(el('span', 'ti', r.label), el('b', '', String(r.value ?? 0)));
+      if (r.sub) face.append(el('small', '', r.sub));
+      cell.append(face);
+      if (!locked) cell.append(mk('-', '−', !r.value));
+      row.append(cell);
+    }
+    box.append(row);
+  }
+  return box;
+}
+
+// Hex map (see "hexmap" in server/games/index.js): pointy-top hexes of radius 1 in map units,
+// fitted to the screen width. Tap near a glowing spot to pick it; the pick is drawn at once and
+// sent as { key, value: spot.id }, and the server echoes it back as `selected`.
+function buildHexmap(m, el) {
+  const { key, tiles = [], roads = [], buildings = [], harbors = [], spots = [], locked = false } = m;
+  let sel = m.selected ?? null;
+  const box = el('div', 'hexmap');
+  const canvas = el('canvas');
+  const xs = [...tiles.map((t) => t.x), ...harbors.map((h) => h.x)];
+  const ys = [...tiles.map((t) => t.y), ...harbors.map((h) => h.y)];
+  const minX = Math.min(...xs) - 1.05, maxX = Math.max(...xs) + 1.05;
+  const minY = Math.min(...ys) - 1.1, maxY = Math.max(...ys) + 1.1;
+  const W = Math.min(520, (document.getElementById('screenBody').clientWidth || 340) - 2);
+  const k = W / (maxX - minX);
+  const H = Math.round((maxY - minY) * k);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width = `${W}px`;
+  canvas.style.height = `${H}px`;
+  const X = (x) => (x - minX) * k;
+  const Y = (y) => (y - minY) * k;
+  const g = canvas.getContext('2d');
+  const font = (px, w = 800) => `${w} ${Math.round(px)}px system-ui, sans-serif`;
+
+  function hex(x, y, r) {
+    g.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = ((-90 + 60 * i) * Math.PI) / 180;
+      const px = X(x) + Math.cos(a) * r * k;
+      const py = Y(y) + Math.sin(a) * r * k;
+      i ? g.lineTo(px, py) : g.moveTo(px, py);
+    }
+    g.closePath();
+  }
+  function draw() {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#123b5c';
+    g.fillRect(0, 0, W, H);
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    for (const h of harbors) {
+      g.fillStyle = '#e8eef8';
+      g.font = font(k * 0.3);
+      g.fillText(h.label, X(h.x), Y(h.y));
+    }
+    for (const t of tiles) {
+      hex(t.x, t.y, 0.98);
+      g.fillStyle = t.color;
+      g.fill();
+      g.font = font(k * 0.42, 400);
+      g.globalAlpha = t.num ? 0.9 : 1;
+      g.fillText(t.label ?? '', X(t.x), Y(t.y) - (t.num ? k * 0.28 : 0));
+      g.globalAlpha = 1;
+      if (t.num) {
+        g.beginPath();
+        g.arc(X(t.x), Y(t.y) + k * 0.25, k * 0.26, 0, Math.PI * 2);
+        g.fillStyle = '#f4ead2';
+        g.fill();
+        g.fillStyle = t.hot ? '#d6302a' : '#1b1f2a';
+        g.font = font(k * 0.3);
+        g.fillText(String(t.num), X(t.x), Y(t.y) + k * 0.26);
+      }
+      if (t.dim) {
+        hex(t.x, t.y, 0.98);
+        g.fillStyle = 'rgba(40,40,48,.72)';
+        g.fill();
+        g.font = font(k * 0.5, 400);
+        g.fillText('☁️', X(t.x), Y(t.y));
+      }
+    }
+    g.lineCap = 'round';
+    for (const r of roads) {
+      g.beginPath();
+      g.moveTo(X(r.x1), Y(r.y1));
+      g.lineTo(X(r.x2), Y(r.y2));
+      g.lineWidth = Math.max(4, k * 0.16);
+      g.strokeStyle = '#0d0f14';
+      g.stroke();
+      g.lineWidth = Math.max(2.5, k * 0.1);
+      g.strokeStyle = r.color;
+      g.stroke();
+    }
+    for (const b of buildings) {
+      const r = k * (b.kind === 'tower' ? 0.26 : 0.19);
+      g.beginPath();
+      if (b.kind === 'tower') g.rect(X(b.x) - r * 0.7, Y(b.y) - r, r * 1.4, r * 2);
+      else g.arc(X(b.x), Y(b.y), r, 0, Math.PI * 2);
+      g.fillStyle = b.color;
+      g.fill();
+      g.lineWidth = 2;
+      g.strokeStyle = '#0d0f14';
+      g.stroke();
+    }
+    // Choices glow soft white; your pick is solid white with a dark outline (never a player colour).
+    for (const s of spots) {
+      const on = s.id === sel;
+      if (s.tile) {
+        hex(s.x, s.y, 0.86);
+        g.lineWidth = on ? 6 : 2;
+        g.strokeStyle = on ? '#fff' : 'rgba(255,255,255,.75)';
+        g.stroke();
+      } else if (s.x1 != null) {
+        g.beginPath();
+        g.moveTo(X(s.x1 + (s.x2 - s.x1) * 0.2), Y(s.y1 + (s.y2 - s.y1) * 0.2));
+        g.lineTo(X(s.x1 + (s.x2 - s.x1) * 0.8), Y(s.y1 + (s.y2 - s.y1) * 0.8));
+        if (on) {
+          g.lineWidth = k * 0.26;
+          g.strokeStyle = '#0d0f14';
+          g.stroke();
+        }
+        g.lineWidth = on ? k * 0.16 : k * 0.1;
+        g.strokeStyle = on ? '#fff' : 'rgba(255,255,255,.6)';
+        g.stroke();
+      } else {
+        g.beginPath();
+        g.arc(X(s.x), Y(s.y), k * (on ? 0.24 : 0.15), 0, Math.PI * 2);
+        g.fillStyle = on ? '#fff' : 'rgba(255,255,255,.3)';
+        g.fill();
+        g.lineWidth = on ? 4 : 2;
+        g.strokeStyle = on ? '#0d0f14' : 'rgba(255,255,255,.95)';
+        g.stroke();
+      }
+    }
+  }
+  if (!locked && spots.length) {
+    canvas.addEventListener('pointerdown', (e) => {
+      const b = canvas.getBoundingClientRect();
+      const x = (e.clientX - b.left) / k + minX;
+      const y = (e.clientY - b.top) / k + minY;
+      let best = null;
+      let bd = 0.75;
+      for (const s of spots) {
+        const d = Math.hypot(s.x - x, s.y - y);
+        if (d < bd) [best, bd] = [s, d];
+      }
+      if (!best || best.id === sel) return;
+      sel = best.id;
+      draw();
+      act(key, best.id);
+    });
+  }
+  draw();
+  box.append(canvas);
+  return box;
 }
 
 // Color wheel (see "wheel" in server/games/index.js): rings from the middle out, hue spokes

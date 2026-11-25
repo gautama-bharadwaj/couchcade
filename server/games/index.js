@@ -49,6 +49,18 @@
 //       pins?: [{ cell, color }],          // other players' markers
 //       locked?: true, small?: true,       // locked = view only; small = a little reference copy
 //     },                                   // (drawn after input, before actions; arrow keys nudge the pick)
+//     tally: {                             // counters with − / + buttons; sends { key, value: 'group:row:+' } (or '-')
+//       key: 'offer', locked?: true,       // locked = just show the numbers (a hand of resources, say)
+//       groups: [{ id: 'give', title?, rows: [{ id: 'wood', label: '🪵', sub?, color?, value, max? }] }],
+//     },
+//     hexmap: {                            // a hex board; tap a glowing spot, sends { key, value: spot.id }
+//       key: 'spot',                       // pointy-top hexes of radius 1, in map units (any origin)
+//       tiles: [{ x, y, color, label?, num?, hot?, dim? }],   // num = a number token, hot = red number
+//       roads: [{ x1, y1, x2, y2, color }], buildings: [{ x, y, color, kind: 'hut' | 'tower' }],
+//       harbors?: [{ x, y, label }],
+//       spots: [{ id, x, y, x1?, y1?, x2?, y2?, tile? }],     // a corner; an edge (with ends); or a whole tile
+//       selected?, locked?,
+//     },                                   // (tally is drawn right after lines; hexmap after input, before wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
 //   }
@@ -64,9 +76,10 @@ import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import tint from './tint.js';
+import tidewake from './tidewake.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, sandbox];
+export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, tidewake, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
