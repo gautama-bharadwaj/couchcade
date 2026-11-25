@@ -48,14 +48,14 @@ export default {
   minPlayers: 4,
   maxPlayers: 8,
   controller: { type: 'screens' },
-  // How to play, shown on the TV at the start (host can skip).
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/gala.js.
   rules: [
-    { title: 'Secret roles', art: 'roles', text: 'Your phone shows your secret role. Most of you are guests, but one or two Thieves are hiding among you. Keep your screen hidden!' },
-    { title: 'Night: pick a room', art: 'night', text: 'Each night everyone secretly picks a room. A Thief can steal the gem from their room, but anyone in there might notice.' },
-    { title: 'Special guests', art: 'powers', text: 'The Detective checks whether someone is a Thief. The Bodyguard guards a room. The Gossip posts anonymous whispers on the TV.' },
-    { title: 'Morning: talk it over', art: 'morning', text: 'The TV shows what was stolen. Your phone tells you who you were with. Share what you saw, or bluff.' },
-    { title: 'Vote someone out', art: 'vote', text: 'Everyone votes at once. Two or more votes, and the most votes, escorts that guest out and shows their role. Accuse an innocent and you lose your next vote.' },
-    { title: 'Who wins', art: 'win', text: 'Thieves win with enough gems, or by lasting until dawn. Guests win by catching every Thief, unless the last one can name the Detective.' },
+    { art: 'roles', title: 'Thieves among the guests', text: 'One or two guests are secretly Thieves. Your phone shows your role. Keep it to yourself!' },
+    { art: 'night', title: 'Night: pick a room', text: 'Everyone secretly picks a room. Thieves can steal a gem, lie low, or plant fake evidence on someone.' },
+    { art: 'clues', title: 'Morning: what did you see?', text: 'Your phone shows who shared your room. Saw a gem vanish? You get a clue about who took it.' },
+    { art: 'powers', title: 'Special guests', text: 'The Detective checks one guest every other night. The Bodyguard guards a room. The Gossip posts anonymous notes on the TV.' },
+    { art: 'vote', title: 'Talk, then vote', text: 'Argue it out, then everyone votes. The most votes is escorted out. Vote out an innocent and you lose your next vote.' },
+    { art: 'win', title: 'Who wins?', text: 'Guests win by catching every Thief. Thieves win by stealing enough gems, or by lasting until dawn.' },
   ],
 
   create({ players }) {

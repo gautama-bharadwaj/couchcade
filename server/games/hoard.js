@@ -45,14 +45,13 @@ export default {
   minPlayers: 2,
   maxPlayers: 10,
   controller: { type: 'screens' },
-  // How to play, shown on the TV at the start (host can skip).
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/hoard.js.
   rules: [
-    { title: 'What hides under the words', art: 'board', text: 'Every word on the board hides an Ember gem, a Frost gem, a pile of dust, or the sleeping dragon.' },
-    { title: 'The Keeper gives clues', art: 'keeper', text: 'Each team has a Keeper who sees the hidden key on their phone. On your turn, your Keeper types one word and a number, like "ocean 3".' },
-    { title: 'Vote on your phones', art: 'vote', text: 'The rest of the team talks it over and taps a word to vote. It turns over when most of you agree.' },
-    { title: 'Gems, dust and turns', art: 'turn', text: 'Your own gem: keep guessing, up to the number plus one. Dust or the other team’s gem ends your turn. Find all your gems first to win.' },
-    { title: 'Never wake the dragon', art: 'dragon', text: 'Turn over the dragon and your team loses on the spot. Keepers, steer them well clear of it!' },
-    { title: 'Two or three players', art: 'coop', text: 'With fewer than four, you are all one team against the dragon: find every gem before the clues run out.' },
+    { art: 'board', title: 'Find your gems', text: 'Two teams, 25 words. Each word hides a gem for Ember, a gem for Frost, dust, or the sleeping dragon.' },
+    { art: 'keeper', title: 'The Keeper sees the key', text: "Only each team's Keeper knows what hides where. They give one word and a number, like Ocean 3." },
+    { art: 'seekers', title: 'Seekers vote', text: "Everyone else votes on their phones. Your own gem? Keep going. Dust or the other team's gem ends your turn." },
+    { art: 'dragon', title: 'Never wake the dragon', text: 'Turn over the dragon and your team loses at once. The first team to find all its gems wins.' },
+    { art: 'coop', title: 'Just 2 or 3 of you?', text: 'Then you all play together against the dragon: find every gem before the clues run out.' },
   ],
 
   create({ players }) {

@@ -950,6 +950,7 @@ function drawParts(ctx, tnow) {
 }
 
 // ---- How-to-play pictures (art keys in server/games/gala.js rules) ----------------------------
+// These win over public/tv/games/rules/gala.js, so the intro matches the drawn mansion.
 
 function drawRules(ctx, art, t, box, now) {
   const cx = box.x + box.w / 2;
@@ -1010,7 +1011,7 @@ function drawRules(ctx, art, t, box, now) {
         ctx.restore();
       }
     });
-  } else if (art === 'morning') {
+  } else if (art === 'morning' || art === 'clues') {
     drawRoom(ctx, 'library', cx - 470, cy - 120, 440, 220, { light: 0.9, t: T, gem: 'gone' });
     drawRoom(ctx, 'conservatory', cx + 30, cy - 120, 440, 220, { light: 0.9, t: T, gem: 'safe' });
     stamp(ctx, 'GEM STOLEN', cx - 250, cy - 80, '#ff5a5f');

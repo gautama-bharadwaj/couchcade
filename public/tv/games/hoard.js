@@ -529,6 +529,7 @@ function drawBrief(ctx, s, byId, W, H, T) {
 }
 
 // ---- How-to-play pictures (art keys in server/games/hoard.js rules) ---------------------------
+// These win over public/tv/games/rules/hoard.js, so the intro matches the drawn cave.
 
 function drawRules(ctx, art, t, box, now) {
   const cx = box.x + box.w / 2;
@@ -570,7 +571,7 @@ function drawRules(ctx, art, t, box, now) {
     keys.forEach((k, i) => drawTile(ctx, 'hidden', cx - 372 + (i % 3) * 76, cy - 130 + Math.floor(i / 3) * 70, 70, 60, { key: k, seed: i }));
     clueSign(ctx, 'OCEAN', 3, TEAM_COLOR.ember, cx + 160, cy - 20, T);
     text(ctx, 'One word and a number', cx + 160, cy + 80, { size: 28, weight: 800, color: '#e8d8b8' });
-  } else if (art === 'vote') {
+  } else if (art === 'vote' || art === 'seekers') {
     tile(cx - 240, cy - 40, 'hidden', 'WHALE');
     tile(cx + 0, cy - 40, 'hidden', 'SAND');
     tile(cx + 240, cy - 40, 'hidden', 'PIANO');
