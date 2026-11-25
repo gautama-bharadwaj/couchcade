@@ -33,12 +33,12 @@
     #lobby { flex-direction: column; gap: 14px; overflow-y: auto; }
     #lobby .me { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 700; }
     .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); flex: none; }
-    /* Game picker: category tabs (when there is more than one category), a two-column grid of
+    /* Game picker: Board & Card / Arcade tabs, a two-column grid of
        tiles that grows with any number of games, and a footer with the pick and Start that stays
        on screen while the list scrolls. */
     #tabs { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: none; margin: 0 -2px; padding: 2px; }
     #tabs::-webkit-scrollbar { display: none; }
-    #tabs button { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-weight: 700; font-size: .95rem; }
+    #tabs button { flex: 1 1 0; padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-weight: 700; font-size: .95rem; }
     #tabs button.on { background: #f2f4f8; border-color: #f2f4f8; color: #0d0f14; }
     #gameList { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
     #gameList button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px; border-radius: 14px; border: 2px solid var(--line); background: var(--panel); color: inherit; min-width: 0; min-height: 64px; }

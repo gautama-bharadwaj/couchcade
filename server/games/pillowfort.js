@@ -62,7 +62,7 @@ export default {
   id: 'pillowfort',
   title: 'Pillow Fort Siege',
   description: 'Two teams build cushion forts, then pillow-bomb the other side’s teddy. 2–8 players.',
-  category: 'action',
+  tab: 'arcade',
   icon: '🏰',
   minPlayers: 2,
   maxPlayers: 8,

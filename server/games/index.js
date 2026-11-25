@@ -6,7 +6,8 @@
 // Server game contract:
 //   export default {
 //     id, title, description,
-//     category: 'action',   // picker tab: action | party | cards | extras, or any new word (shown capitalized)
+//     tab: 'board',         // picker tab: 'board' (Board & Card) or 'arcade' (Arcade). Optional: games with
+//                           //   controller.type 'screens' default to 'board', joystick games to 'arcade'.
 //     icon: '🚗',           // one emoji for the picker tile (optional; the first letter is used otherwise)
 //     minPlayers, maxPlayers,
 //     controller: { buttons: [{ id: 'a', label: 'Dash' }] },   // phone layout: joystick + up to 2 buttons (a, b)
@@ -66,19 +67,34 @@ import pillowfort from './pillowfort.js';
 import tint from './tint.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, sandbox];
+// Order within each tab is the order here. The first Board & Card game is picked when the server starts.
+export const GAMES = [shed, fuse, gala, tint, stickup, bumper, sumo, potato, pillowfort, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
 /**
- * What the TV and phones need to show a game picker. Games are grouped by category, in the order
- * each category first appears in GAMES (so a new category needs no change here); a game without
- * one goes under "Other". The order is the same on the TV and every phone, so arrow keys match.
+ * The picker's two tabs, in order. Board & Card is the main focus and comes first; Arcade holds
+ * the real-time joystick games. Add a tab here (and set `tab` on its games) to make another.
+ */
+export const TABS = [
+  { id: 'board', label: 'Board & Card' },
+  { id: 'arcade', label: 'Arcade' },
+];
+
+/** A game's tab: its own `tab` if it names one of TABS, else from its controller type. */
+export function tabOf(game) {
+  if (TABS.some((t) => t.id === game.tab)) return game.tab;
+  return game.controller?.type === 'screens' ? 'board' : 'arcade';
+}
+
+/**
+ * What the TV and phones need to show a game picker: games grouped by tab (in TABS order, then
+ * GAMES order). The order is the same on the TV and every phone, so arrow keys match.
  */
 export function gameList() {
-  const list = GAMES.map(({ id, title, description, icon, category, minPlayers, maxPlayers }) => ({
-    id, title, description, icon: icon ?? null, category: String(category || 'other').toLowerCase(), minPlayers, maxPlayers,
+  const list = GAMES.map((g) => ({
+    id: g.id, title: g.title, description: g.description, icon: g.icon ?? null, tab: tabOf(g), minPlayers: g.minPlayers, maxPlayers: g.maxPlayers,
   }));
-  const order = [...new Set(list.map((g) => g.category))];
-  return list.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category)); // stable sort
+  const order = TABS.map((t) => t.id);
+  return list.sort((a, b) => order.indexOf(a.tab) - order.indexOf(b.tab)); // stable sort
 }

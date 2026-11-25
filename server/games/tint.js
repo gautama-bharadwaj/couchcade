@@ -75,7 +75,7 @@ const NOUN_CELL = new Map(Object.entries(NOUNS).map(([w, [deg, r]]) => [w, cellO
 export default {
   id: 'tint',
   title: 'Tint & Tell',
-  category: 'party',
+  tab: 'board',
   icon: '🎨',
   description: 'Clue a secret color in one word, then two. Pin it on the wheel.',
   minPlayers: 2,

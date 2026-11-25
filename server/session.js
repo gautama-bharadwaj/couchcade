@@ -7,7 +7,7 @@
 // Games never deal with joining, picking or starting. They only implement the contract in games/index.js.
 
 import { ARENA } from './arena.js';
-import { GAMES, gamesById, gameList } from './games/index.js';
+import { GAMES, TABS, gamesById, gameList } from './games/index.js';
 import { log } from './log.js';
 
 const RESULTS_MS = 8000;
@@ -38,6 +38,7 @@ export class Session {
       phase: this.phase,
       gameId: this.selectedId,
       games: gameList(),
+      tabs: TABS,
       controller: this.def.controller,
       hostId: this.lobby.hostId(),
       players: this.lobby.summary(),

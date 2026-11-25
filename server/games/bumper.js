@@ -27,7 +27,7 @@ const ROUNDOVER_S = 3;
 export default {
   id: 'bumper',
   title: 'Bumper Arena',
-  category: 'action',
+  tab: 'arcade',
   icon: '🚗',
   description: 'Shove everyone off the shrinking platform. First to 3 wins.',
   minPlayers: 1, // 1 = practice mode; it's a real game from 2
