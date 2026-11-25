@@ -49,6 +49,14 @@
 //       pins?: [{ cell, color }],          // other players' markers
 //       locked?: true, small?: true,       // locked = view only; small = a little reference copy
 //     },                                   // (drawn after input, before actions; arrow keys nudge the pick)
+//     dial: {                              // a 0–100 band between two ideas; sends { key, value: String(0–100) }
+//       key: 'dial', left: 'Bland', right: 'Spicy',
+//       value?,                            // your own needle (null = not set yet)
+//       crowd?, pins?: [{ value, color }], // a red shared needle, and other players' markers
+//       target?,                           // a white mark with scoring zones around it
+//       locked?: true, small?: true,       // locked = view only; small = a short reference copy
+//     },                                   // (drawn after cards, before choose; ←/→ nudge 1, ↑/↓ nudge 5)
+//                                          // changes to value / crowd / pins redraw in place, so drags aren't cut off
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
 //   }
@@ -64,9 +72,10 @@ import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import tint from './tint.js';
+import tunein from './tunein.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, sandbox];
+export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, tunein, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 

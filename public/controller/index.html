@@ -115,6 +115,11 @@
     #screen .wheel canvas { touch-action: none; }
     #screen .nudges { display: grid; grid-template-columns: 1fr 1.6fr 1.6fr 1fr; gap: 6px; width: 100%; max-width: 380px; }
     #screen .nudges button { padding: 10px 6px; font-size: 1rem; }
+    #screen .dial { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    #screen .dial canvas { touch-action: none; }
+    #screen .dialLabels { display: flex; justify-content: space-between; gap: 12px; width: 100%; max-width: 420px; font-weight: 700; font-size: .95rem; }
+    #screen .dialLabels .l { color: #7cc7e8; }
+    #screen .dialLabels .r { color: #f0a070; text-align: right; }
     #screenFooter { min-height: 1.2em; }
     body.screens #hud { display: flex; }
 

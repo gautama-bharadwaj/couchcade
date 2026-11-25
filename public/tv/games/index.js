@@ -14,6 +14,7 @@ import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import tint from './tint.js';
+import tunein from './tunein.js';
 import sandbox from './sandbox.js';
 
-export const renderers = { bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, sandbox };
+export const renderers = { bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, tunein, sandbox };
