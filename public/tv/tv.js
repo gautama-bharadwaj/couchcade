@@ -3,9 +3,11 @@
 //
 // Keys (any keyboard on the computer driving the TV):
 //   arrows pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game · I switch join address
+//   During a game's how-to-play: S, Esc or Enter skip · ←/→ step · R replays it mid-game
 
 import { renderers } from './games/index.js';
 import audio from './audio.js';
+import { drawRulesOverlay } from './rules.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
@@ -24,6 +26,7 @@ let joinIndex = 0;
 let renderDelayMs = 1.5 * (1000 / 60);
 const snapshots = [];
 let net = null; // latest {t:'net'} latency stats
+let intro = null; // { step, id, at, until } the how-to-play step showing (performance.now() times)
 let showNet = false;
 
 // --- Join info -----------------------------------------------------------------
@@ -112,6 +115,7 @@ function onPhase(msg) {
   phase = msg;
   phaseSounds(prevPhase, msg, prevCount);
   if (msg.phase === 'playing' && prevPhase !== 'playing') snapshots.length = 0;
+  onIntro(msg);
 
   $('lobby').classList.toggle('show', msg.phase === 'lobby');
   $('results').classList.toggle('show', msg.phase === 'results');
@@ -231,6 +235,22 @@ function renderResults(results) {
   }
 }
 
+// --- How to play -------------------------------------------------------------------
+// The server holds the clock (and pauses the game); the TV counts down the step it was told about.
+function onIntro(msg) {
+  const now = performance.now();
+  if (!msg.intro || msg.phase !== 'playing') {
+    if (intro) audio.hush();
+    intro = null;
+    return;
+  }
+  const isNew = intro?.id !== msg.intro.id;
+  const shown = isNew ? 0 : now - intro.at; // same step re-sent (someone joined): keep its animation going
+  intro = { step: msg.intro.step, id: msg.intro.id, at: now - shown, until: now + msg.intro.msLeft };
+  const step = msg.rules?.[msg.intro.step];
+  if (isNew && step) audio.say(step.text, { interrupt: true, rate: 1, delay: 0.25 });
+}
+
 // --- Rendering -------------------------------------------------------------------
 // The canvas is drawn at most 1.6x the 1600x900 arena (2560x1440 pixels). A 4K TV on a laptop
 // would otherwise get a 3840x2160 canvas: 2.25x the pixels to fill every frame, for detail
@@ -279,6 +299,20 @@ function frame() {
   } else {
     ctx.fillStyle = '#0d0f14';
     ctx.fillRect(0, 0, arena.w, arena.h);
+  }
+  if (intro && phase?.phase === 'playing' && phase.rules) {
+    const now = performance.now();
+    drawRulesOverlay(ctx, {
+      steps: phase.rules,
+      step: intro.step,
+      t: (now - intro.at) / 1000,
+      frac: (now - intro.at) / Math.max(1, intro.until - intro.at),
+      title: phase.games.find((g) => g.id === phase.gameId)?.title ?? '',
+      renderer: renderers[phase.gameId],
+      hostName: phase.players.find((p) => p.id === phase.hostId)?.name,
+      now,
+      arena,
+    });
   }
 
   const connected = ws?.readyState === WebSocket.OPEN;
@@ -351,7 +385,7 @@ function latColor(ms, ok, bad) {
 // Renderers may export onSnapshot(prev, cur, audio) to play sounds when the game state changes.
 function onSnapshot(msg, prevData) {
   const renderer = renderers[msg.gameId];
-  if (!renderer?.onSnapshot || !audio.isUnlocked()) return;
+  if (!renderer?.onSnapshot || !audio.isUnlocked() || intro) return; // the board is paused under the rules
   try {
     renderer.onSnapshot(prevData, msg.data, audio);
   } catch (err) {
@@ -416,5 +450,15 @@ window.addEventListener('keydown', (e) => {
   }
   if (phase.phase === 'lobby' && key === 'enter') sendCmd({ t: 'start' });
   if (phase.phase === 'lobby' && key === 'b') sendCmd({ t: e.shiftKey ? 'removeBot' : 'addBot' });
+  if (intro && phase.phase === 'playing') {
+    // While the rules play, Esc skips them rather than ending the game nobody has started yet.
+    const what = { s: 'skip', escape: 'skip', enter: 'skip', arrowright: 'next', ' ': 'next', arrowleft: 'back' }[key];
+    if (what) {
+      e.preventDefault();
+      sendCmd({ t: 'rules', do: what });
+    }
+    return;
+  }
+  if (key === 'r' && phase.phase === 'playing' && phase.rules) sendCmd({ t: 'rules', do: 'show' });
   if (key === 'escape') sendCmd({ t: 'end' });
 });

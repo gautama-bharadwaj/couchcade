@@ -74,6 +74,15 @@ export default {
   minPlayers: 2,
   maxPlayers: 6,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip).
+  rules: [
+    { title: 'First to 8 points wins', text: 'Huts are worth 1 point and Lighthouses 2. Build them on the corners of the island tiles.' },
+    { title: 'Roll, harvest, build', text: 'Each turn, roll the dice. Every tile showing that number pays its resource to each building on its corners.' },
+    { title: 'Build on your phone', text: 'Tap a glowing spot on your phone’s map, then confirm. Huts must touch your Trail and can’t sit right next to another Hut.' },
+    { title: 'Trade out loud', text: 'Offer any cards to the table. Others accept, pass or counter, and you pick the deal. Or trade with the bank at 4 for 1, better at a harbor.' },
+    { title: 'Seven erupts the volcano', text: 'Anyone holding more than 7 cards loses half. The roller drifts the Ash Cloud onto a tile and steals a card from someone there.' },
+    { title: 'Bottles and awards', text: 'Buy a Message in a Bottle for a surprise. Explorer is worth 2 points for the longest reach, Trader 1 point for the most deals.' },
+  ],
 
   create({ players }) {
     const order = shuffle([...players.values()].filter((p) => p.connected).map((p) => p.id));
