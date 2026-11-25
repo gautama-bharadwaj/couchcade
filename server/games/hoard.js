@@ -45,6 +45,14 @@ export default {
   minPlayers: 2,
   maxPlayers: 10,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/hoard.js.
+  rules: [
+    { art: 'board', title: 'Find your gems', text: 'Two teams, 25 words. Each word hides a gem for Ember, a gem for Frost, dust, or the sleeping dragon.' },
+    { art: 'keeper', title: 'The Keeper sees the key', text: "Only each team's Keeper knows what hides where. They give one word and a number, like Ocean 3." },
+    { art: 'seekers', title: 'Seekers vote', text: "Everyone else votes on their phones. Your own gem? Keep going. Dust or the other team's gem ends your turn." },
+    { art: 'dragon', title: 'Never wake the dragon', text: 'Turn over the dragon and your team loses at once. The first team to find all its gems wins.' },
+    { art: 'coop', title: 'Just 2 or 3 of you?', text: 'Then you all play together against the dragon: find every gem before the clues run out.' },
+  ],
 
   create({ players }) {
     const ids = [...players.values()].filter((p) => p.connected).map((p) => p.id);

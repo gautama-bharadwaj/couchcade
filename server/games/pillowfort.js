@@ -67,6 +67,12 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { buttons: [{ id: 'a', label: 'Jump' }, { id: 'b', label: 'Grab / Throw' }] },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/pillowfort.js.
+  rules: [
+    { art: 'build', title: 'Build your fort', text: 'Each team guards a teddy. Cushions land in the middle: B grabs one, carry it home, B again stacks it.' },
+    { art: 'siege', title: 'Then, pillow fight!', text: 'Hold B to aim, let go to throw. Two hits knock a cushion loose. A jumps.' },
+    { art: 'win', title: 'Hit the teddy', text: "Hit the other team's teddy to win the round. Out of time? More cushions standing wins. First to 2 rounds." },
+  ],
 
   create({ players, arena: size }) {
     const kids = new Map(); // id -> player body + team

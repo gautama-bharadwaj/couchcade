@@ -85,6 +85,12 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { buttons: [{ id: 'a', label: 'Tackle' }, { id: 'b', label: 'Dodge' }] },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/potato.js.
+  rules: [
+    { art: 'bomb', title: 'Pass the bomb', text: 'Someone always holds a ticking bomb. Tackle someone with A to hand it over.' },
+    { art: 'dodge', title: 'Dodge with B', text: 'A quick hop nobody can tackle. And nobody knows how long the fuse is!' },
+    { art: 'score', title: 'Survive the blasts', text: 'Each blast you live through is a point. Last one standing gets 2 more. Most points after 3 rounds wins.' },
+  ],
 
   create({ players }) {
     const bodies = new Map(); // id -> body

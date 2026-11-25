@@ -33,6 +33,11 @@ export default {
   minPlayers: 1, // 1 = practice mode; it's a real game from 2
   maxPlayers: 8,
   controller: { buttons: [{ id: 'a', label: 'Dash' }] },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/bumper.js.
+  rules: [
+    { art: 'move', title: 'Shove them off', text: 'The stick rolls you around. A dashes, and a dash hits much harder.' },
+    { art: 'shrink', title: 'The floor shrinks', text: 'Last one on the platform wins the round. First to win 3 rounds wins.' },
+  ],
 
   create({ players, arena }) {
     const cx = arena.w / 2;
