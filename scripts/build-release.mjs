@@ -125,6 +125,8 @@ console.log(`Smoke test it with: node scripts/smoke.mjs --cmd ${path.relative(RO
  * TV page in the default browser and shows a small native dialog with the addresses and a Quit
  * button (showMacWindow in server/runtime.js). LSUIElement keeps it out of the Dock: the
  * executable isn't a Cocoa app, so a Dock icon would only bounce and never answer Quit.
+ * NSAppSleepDisabled: App Nap would otherwise slow its timers once the browser is in front,
+ * and the game's ticks and turn timers would stutter.
  */
 function makeMacApp(binary, zipPath) {
   const app = path.join(DIST, 'Couchcade.app');
@@ -148,6 +150,7 @@ function makeMacApp(binary, zipPath) {
   <key>LSMinimumSystemVersion</key><string>13.5</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSUIElement</key><true/>
+  <key>NSAppSleepDisabled</key><true/>
 </dict>
 </plist>
 `,
