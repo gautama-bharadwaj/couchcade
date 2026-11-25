@@ -41,7 +41,7 @@ function drawCard() {
 export default {
   id: 'tunein',
   title: 'Tune In',
-  category: 'party',
+  tab: 'board',
   icon: '📻',
   description: 'The DJ clues a secret station between two ideas. Tune the dial together.',
   minPlayers: 2,

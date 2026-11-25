@@ -58,7 +58,7 @@ export default {
   id: 'sumo',
   title: 'Sumo Spin',
   description: 'Charge and shove on a spinning, tilting ring. Time a dodge perfectly. First to 3.',
-  category: 'action',
+  tab: 'arcade',
   icon: '🌀',
   minPlayers: 1, // 1 = practice mode; it's a real game from 2
   maxPlayers: 8,
