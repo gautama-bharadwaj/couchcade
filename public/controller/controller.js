@@ -268,6 +268,9 @@ $('rulesTvBtn').addEventListener('click', () => cmd({ t: 'rules', do: 'show' }))
 // --- Game screens (turn-based games) ---------------------------------------------
 // Rebuilt only when the screen JSON changes, so a half-typed message survives the 10/s updates.
 let lastScreen = null;
+let lastRest = null;
+let dialDragging = false;
+let pendingScreen;
 let lastTitle = null;
 function renderScreen(screen) {
   // The footer (often a countdown) updates in place, so ticking timers don't rebuild the
@@ -275,7 +278,18 @@ function renderScreen(screen) {
   $('screenFooter').textContent = screen?.footer ?? '';
   const json = JSON.stringify(screen ? { ...screen, footer: undefined } : null);
   if (json === lastScreen) return;
+  // A dial that's the only thing that changed (someone else moved, or the server echoed our own
+  // needle) is redrawn in place, so a drag in progress isn't interrupted.
+  const rest = JSON.stringify(screen ? { ...screen, footer: undefined, dial: screen.dial ? { ...screen.dial, value: 0, crowd: 0, pins: 0 } : undefined } : null);
+  if (screen?.dial && dialUpdate && rest === lastRest) {
+    lastScreen = json;
+    return dialUpdate(screen.dial);
+  }
+  // Never rebuild under a finger that's dragging a dial: wait until it lifts.
+  if (dialDragging) return void (pendingScreen = screen);
+  pendingScreen = undefined;
   lastScreen = json;
+  lastRest = rest;
   // A gentle buzz when a new screen appears (your turn, a new night…). Android only.
   if (screen?.title && screen.title !== lastTitle) navigator.vibrate?.(35);
   lastTitle = screen?.title;
@@ -320,6 +334,9 @@ function renderScreen(screen) {
     }
     wrap.append(cards);
   }
+
+  if (screen.dial) wrap.append(buildDial(screen.dial, el));
+  else dialUpdate = dialNudge = null;
 
   if (screen.choose) {
     const { key, options = [], selected, locked } = screen.choose;
@@ -721,6 +738,157 @@ function buildWheel(w, el) {
   return box;
 }
 
+// Dial (see "dial" in server/games/index.js): a band from 0 (left idea) to 100 (right idea).
+// Drag anywhere on it or use the nudge buttons; while dragging, moves go out ~12 times a second
+// and the server's echo of our own needle is ignored until the finger lifts.
+let dialUpdate = null; // (dial) redraws in place with new pins / crowd / value
+let dialNudge = null; // (delta) for the arrow keys, while the dial can be moved
+const DIAL_SEND_MS = 80;
+function buildDial(d0, el) {
+  let d = d0;
+  let val = d.value ?? null;
+  let dragging = false;
+  let lastSent = 0;
+  let sendTimer = null;
+  const box = el('div', 'dial');
+  const canvas = el('canvas');
+  const W = Math.min(420, (document.getElementById('screenBody').clientWidth || 340) - 4);
+  const H = d.small ? 70 : 140;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width = `${W}px`;
+  canvas.style.height = `${H}px`;
+  const g = canvas.getContext('2d');
+  const PAD = 14;
+  const bandTop = d.small ? 10 : 26;
+  const bandH = H - bandTop - (d.small ? 10 : 22);
+  const xOf = (v) => PAD + ((W - PAD * 2) * v) / 100;
+  const ZONES = [[13, '#ffd166'], [8, '#ff9a4a'], [3, '#ff5a5f']]; // same as the TV: crackly, clear, crystal clear
+
+  function draw() {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    // The band: cool on the left, warm on the right.
+    const grad = g.createLinearGradient(PAD, 0, W - PAD, 0);
+    grad.addColorStop(0, '#2c6e8f');
+    grad.addColorStop(0.5, '#3b3f4f');
+    grad.addColorStop(1, '#a0522d');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.roundRect(PAD - 8, bandTop, W - PAD * 2 + 16, bandH, 10);
+    g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.35)';
+    g.lineWidth = 1;
+    for (let v = 0; v <= 100; v += 5) {
+      const x = xOf(v);
+      const long = v % 25 === 0;
+      g.beginPath();
+      g.moveTo(x, bandTop + bandH - (long ? 16 : 8));
+      g.lineTo(x, bandTop + bandH);
+      g.stroke();
+    }
+    if (d.target != null) {
+      for (const [w, c] of ZONES) {
+        g.fillStyle = c;
+        const x0 = xOf(Math.max(0, d.target - w));
+        g.fillRect(x0, bandTop, xOf(Math.min(100, d.target + w)) - x0, bandH);
+      }
+      g.fillStyle = '#fff';
+      g.fillRect(xOf(d.target) - 1.5, bandTop - 4, 3, bandH + 8);
+    }
+    for (const p of d.pins ?? []) {
+      g.beginPath();
+      g.arc(xOf(p.value), bandTop - 9, 6, 0, Math.PI * 2);
+      g.fillStyle = p.color;
+      g.fill();
+    }
+    if (d.crowd != null) {
+      const x = xOf(d.crowd);
+      g.fillStyle = '#ff3b3b';
+      g.fillRect(x - 2, bandTop - 2, 4, bandH + 4);
+      g.beginPath();
+      g.moveTo(x - 8, bandTop + bandH + 12);
+      g.lineTo(x + 8, bandTop + bandH + 12);
+      g.lineTo(x, bandTop + bandH + 2);
+      g.fill();
+    }
+    if (val != null) {
+      const x = xOf(val);
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#fff';
+      g.lineWidth = 3;
+      g.strokeStyle = '#0d0f14';
+      g.fillStyle = accent;
+      g.beginPath();
+      g.roundRect(x - 9, bandTop + 4, 18, bandH - 8, 7);
+      g.fill();
+      g.stroke();
+    }
+  }
+
+  function send(force) {
+    clearTimeout(sendTimer);
+    const wait = DIAL_SEND_MS - (performance.now() - lastSent);
+    if (!force && wait > 0) return void (sendTimer = setTimeout(() => send(true), wait));
+    lastSent = performance.now();
+    cmd({ t: 'act', key: d.key, value: String(val) });
+  }
+  function setVal(v, force) {
+    v = Math.max(0, Math.min(100, Math.round(v)));
+    if (v === val && !force) return;
+    val = v;
+    draw();
+    send(force);
+  }
+  const valAt = (e) => {
+    const b = canvas.getBoundingClientRect();
+    return ((e.clientX - b.left - PAD) / (W - PAD * 2)) * 100;
+  };
+  if (!d.locked) {
+    canvas.addEventListener('pointerdown', (e) => {
+      dragging = dialDragging = true;
+      canvas.setPointerCapture(e.pointerId);
+      navigator.vibrate?.(10);
+      setVal(valAt(e));
+    });
+    canvas.addEventListener('pointermove', (e) => dragging && setVal(valAt(e)));
+    const up = () => {
+      if (!dragging) return;
+      dragging = dialDragging = false;
+      send(true);
+      if (pendingScreen !== undefined) {
+        const next = pendingScreen;
+        pendingScreen = undefined;
+        renderScreen(next);
+      }
+    };
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
+    dialNudge = (delta) => setVal((val ?? 50) + delta, true);
+  } else dialNudge = null;
+
+  dialUpdate = (nd) => {
+    d = nd;
+    if (!dragging && nd.value != null && performance.now() - lastSent > 400) val = nd.value;
+    draw();
+  };
+
+  const labels = el('div', 'dialLabels');
+  labels.append(el('span', 'l', `◀ ${d.left}`), el('span', 'r', `${d.right} ▶`));
+  box.append(canvas, labels);
+  draw();
+  if (!d.locked) {
+    const nudges = el('div', 'nudges');
+    for (const [label, delta] of [['◀◀', -5], ['◀', -1], ['▶', 1], ['▶▶', 5]]) {
+      const b = el('button', 'secondaryBtn', label);
+      b.addEventListener('click', () => dialNudge?.(delta));
+      nudges.append(b);
+    }
+    box.append(nudges);
+  }
+  return box;
+}
+
 function act(key, value) {
   navigator.vibrate?.(15);
   cmd(value === undefined ? { t: 'act', key } : { t: 'act', key, value });
@@ -824,6 +992,10 @@ window.addEventListener('keydown', (e) => {
   if (nudge && wheelNudge && phase?.controller?.type === 'screens') {
     e.preventDefault();
     return wheelNudge(...nudge);
+  }
+  if (nudge && dialNudge && phase?.controller?.type === 'screens') {
+    e.preventDefault();
+    return dialNudge(nudge[0] || -nudge[1] * 5);
   }
   if (e.repeat) return;
   keys.add(e.code);

@@ -185,6 +185,12 @@ export const sfx = {
   },
   fall: () => tone(1400, 0.9, { type: 'sine', slideTo: 180, gain: 0.16 }),
   doorCreak: () => tone(160, 0.8, { type: 'sawtooth', slideTo: 230, gain: 0.05 }),
+  // Radio: a burst of static, and static that sweeps into a clear tone (finding the station).
+  static: (secs = 1) => noise(secs, { type: 'bandpass', freq: 2400, slideTo: 900, q: 0.4, gain: 0.22, attack: 0.05 }),
+  tuneIn: () => {
+    noise(0.7, { type: 'bandpass', freq: 600, slideTo: 3200, q: 2, gain: 0.25 });
+    tone(880, 0.5, { type: 'sine', slideTo: 660, gain: 0.12, at: 0.55 });
+  },
   clockChime: () => [0, 1, 2].forEach((i) => tone(N.G4 / 2, 1.1, { type: 'sine', gain: 0.2, at: i * 0.9 })),
 
   // Stickup
