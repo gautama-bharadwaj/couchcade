@@ -327,7 +327,7 @@ function sky(ctx, s, W, T, day) {
   } else {
     const n = Math.max(1, s.night || 1);
     const q = (n - 1) / Math.max(1, s.maxNights - 1);
-    drawMoonDisc(ctx, 150, 560 - q * 300, 40, 0.22);
+    drawMoonDisc(ctx, 150, 400 - q * 170, 40, 0.22);
   }
 }
 
@@ -681,7 +681,7 @@ function introOverlay(ctx, s, since, T) {
   for (let i = 0; i < n; i++) {
     const a = (i - (n - 1) / 2) * 0.16;
     ctx.save();
-    ctx.translate(800 + (i - 2) * 46, 470);
+    ctx.translate(800 + (i - 2) * 46, 520);
     ctx.rotate(a);
     drawCardBack(ctx, 0, -40, 96, 138, T + i);
     ctx.restore();
@@ -734,7 +734,7 @@ function gossip(ctx, s, T) {
 }
 
 function ballot(ctx, s, tnow, T) {
-  panel(ctx, 520, 280, 560, 380, 0.8);
+  panel(ctx, 440, 280, 720, 380, 0.88);
   const voters = s.players.filter((p) => !p.out && !p.noVote);
   const done = voters.filter((p) => p.done).length;
   // box
@@ -751,19 +751,28 @@ function ballot(ctx, s, tnow, T) {
   wg.addColorStop(1, '#4a2a12');
   ctx.fillStyle = wg;
   ctx.fillRect(bx - bw / 2, by - bh / 2, bw, bh);
-  ctx.fillStyle = '#8a5a30';
+  // top and side faces, a little in perspective
+  ctx.fillStyle = '#9a6a38';
   ctx.beginPath();
-  ctx.moveTo(bx - bw / 2 - 10, by - bh / 2);
-  ctx.lineTo(bx - bw / 2 + 20, by - bh / 2 - 34);
-  ctx.lineTo(bx + bw / 2 + 20, by - bh / 2 - 34);
-  ctx.lineTo(bx + bw / 2 - 10 + 20, by - bh / 2);
+  ctx.moveTo(bx - bw / 2, by - bh / 2);
+  ctx.lineTo(bx - bw / 2 + 30, by - bh / 2 - 30);
+  ctx.lineTo(bx + bw / 2 + 30, by - bh / 2 - 30);
+  ctx.lineTo(bx + bw / 2, by - bh / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#3a200c';
+  ctx.beginPath();
+  ctx.moveTo(bx + bw / 2, by - bh / 2);
+  ctx.lineTo(bx + bw / 2 + 30, by - bh / 2 - 30);
+  ctx.lineTo(bx + bw / 2 + 30, by + bh / 2 - 30);
+  ctx.lineTo(bx + bw / 2, by + bh / 2);
   ctx.closePath();
   ctx.fill();
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 3;
   ctx.strokeRect(bx - bw / 2, by - bh / 2, bw, bh);
   ctx.fillStyle = '#1a0e06';
-  ctx.fillRect(bx - 50, by - bh / 2 - 22, 110, 10);
+  ctx.fillRect(bx - 40, by - bh / 2 - 19, 110, 9);
   // gold diamond emblem
   drawGem(ctx, bx, by + 6, 56, '#ff5a5f', 0.3 + 0.3 * Math.sin(T * 2));
   // envelopes falling in
@@ -785,7 +794,7 @@ function ballot(ctx, s, tnow, T) {
 }
 
 function verdict(ctx, s, since, T) {
-  ctx.fillStyle = 'rgba(8,6,14,.78)';
+  ctx.fillStyle = 'rgba(8,6,14,.9)';
   ctx.fillRect(0, 200, 1600, GROUND - 200 + 10);
   const byId = new Map(s.players.map((p) => [p.id, p]));
   // Votes: voter → target, revealed together.
@@ -866,7 +875,7 @@ function lastGuess(ctx, s, T) {
 
 function ending(ctx, s, since, T) {
   const thieves = s.winner === 'thieves';
-  ctx.fillStyle = 'rgba(8,6,14,.72)';
+  ctx.fillStyle = 'rgba(8,6,14,.88)';
   ctx.fillRect(0, 160, 1600, GROUND - 160 + 10);
   // fireworks for the guests, a getaway under the moon for the thieves
   if (!thieves && Math.random() < 0.06) burst(300 + Math.random() * 1000, 200 + Math.random() * 120, 40, ['#ffc93c', '#3fa7ff', '#ff6fd8', '#4cd97b'][Math.floor(Math.random() * 4)], { speed: 6, up: 0, life: 1300, size: 4 });

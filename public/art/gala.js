@@ -18,13 +18,20 @@ const SKINS = ['#f1c8a5', '#e0a878', '#c68652', '#8d5a36', '#5e3a22', '#f6d9c0']
 /** Small deterministic random numbers, so a picture looks the same every frame. */
 export function rng(seed) {
   let s = (seed * 2654435761) >>> 0 || 1;
-  return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const next = () => {
+    s ^= s << 13;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    return (s >>> 0) / 4294967296;
+  };
+  for (let i = 0; i < 4; i++) next();
+  return next;
 }
 
 /** A stable number from a string (a player id, say). */
 export function seedOf(str) {
-  let h = 7;
-  for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  let h = 2166136261;
+  for (const ch of String(str)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
   return h;
 }
 

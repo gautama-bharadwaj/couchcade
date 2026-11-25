@@ -138,6 +138,16 @@
     #screen .tcard.zero canvas { opacity: .35; }
     #screen .tcard small { font-size: .66rem; color: var(--muted); font-weight: 700; }
     #screen canvas.art { display: block; flex: none; }
+    #screen .hero { position: relative; align-self: center; perspective: 900px; }
+    #screen .hero canvas { position: absolute; inset: 0; backface-visibility: hidden; }
+    #screen .hero.flipping .face { transform: rotateY(180deg); animation: heroFace 1.1s .5s cubic-bezier(.3,.7,.3,1) forwards; }
+    #screen .hero.flipping .back { animation: heroBack 1.1s .5s cubic-bezier(.3,.7,.3,1) forwards; }
+    @keyframes heroFace { to { transform: rotateY(0deg); } }
+    @keyframes heroBack { to { transform: rotateY(-180deg); } }
+    #screen .gcell.drawn { background: transparent !important; box-shadow: none; }
+    #screen .gcell .cellArt { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    #screen .gcell.drawn .w, #screen .gcell.drawn .m, #screen .gcell.drawn .dots { position: relative; }
+    #screen .gcell.drawn .dots { position: absolute; }
     #screen canvas.strip { margin: 4px 0 2px; }
     #screen .card.withArt { display: flex; align-items: center; gap: 12px; }
     #screen .tbtn { border: 0; background: #232a3b; color: inherit; font-size: 1.3rem; font-weight: 900; padding: 6px 0; }

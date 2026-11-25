@@ -32,6 +32,9 @@
 //     title: 'Night 2',                    // big heading
 //     tag: { label: 'Thief', color },      // badge, e.g. a secret role
 //     swatch: { color, label? },           // a big block of one color (a secret color, say)
+//     hero: { art, flip?, small? },        // a big illustrated card drawn by the art module's drawHero
+//                                          //   (a secret role, say); flip = turn over from drawHeroBack
+//                                          //   the first time it shows. Needs `art` on the screen.
 //     lines: ['You are in the Library.'],  // paragraphs
 //     cards: [{ label, sub?, color? }],    // read-only info tiles (clues, who you saw…)
 //     choose: {                            // pick one option; sends { key, value: option.id }
@@ -75,7 +78,8 @@
 //       key: 'tile', cols: 5, locked?,     // locked = view only
 //       cells: [{ id, label, color?, ink?, // ink = text color
 //                 mark?, dots?: [color],   // mark = small caption; dots = little voter markers
-//                 ring?, dim?, disabled? }],// ring = outline color (your pick)
+//                 ring?, dim?, disabled?,  // ring = outline color (your pick)
+//                 art? }],                 // art = a drawn tile behind the word (art module's drawCell)
 //     },                                   // (drawn after input, before the wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
@@ -86,6 +90,8 @@
 // to draw pictures instead of plain labels. Its exports are all optional:
 //   drawNamed(g, name, x, y, size, color?)   an icon centred in a size x size square
 //   drawCard(g, name, x, y, w, h, count)     a playing card (a locked tally shows these)
+//   drawHero(g, name, x, y, w, h), drawHeroBack(g, x, y, w, h)   the big card of `hero`
+//   drawCell(g, art, w, h, cell)             a grid cell's background, w x h from (0, 0)
 //   mapTile(g, art, x, y, r, seed), mapPiece(g, art, x, y, k, color), mapRoad(g, x1, y1, x2, y2,
 //   color, k), mapHarbor(g, x, y, k, art), mapCover(g, x, y, r)   pictures for the hexmap
 // Then these fields draw with it: tally rows `art`; choose options `art`, `artColor`, and

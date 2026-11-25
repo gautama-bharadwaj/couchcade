@@ -48,6 +48,15 @@ export default {
   minPlayers: 4,
   maxPlayers: 8,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip).
+  rules: [
+    { title: 'Secret roles', art: 'roles', text: 'Your phone shows your secret role. Most of you are guests, but one or two Thieves are hiding among you. Keep your screen hidden!' },
+    { title: 'Night: pick a room', art: 'night', text: 'Each night everyone secretly picks a room. A Thief can steal the gem from their room, but anyone in there might notice.' },
+    { title: 'Special guests', art: 'powers', text: 'The Detective checks whether someone is a Thief. The Bodyguard guards a room. The Gossip posts anonymous whispers on the TV.' },
+    { title: 'Morning: talk it over', art: 'morning', text: 'The TV shows what was stolen. Your phone tells you who you were with. Share what you saw, or bluff.' },
+    { title: 'Vote someone out', art: 'vote', text: 'Everyone votes at once. Two or more votes, and the most votes, escorts that guest out and shows their role. Accuse an innocent and you lose your next vote.' },
+    { title: 'Who wins', art: 'win', text: 'Thieves win with enough gems, or by lasting until dawn. Guests win by catching every Thief, unless the last one can name the Detective.' },
+  ],
 
   create({ players }) {
     // Roster is fixed at the start; people who join mid-game watch until the next game.
@@ -86,7 +95,7 @@ export default {
     const color = (id) => players.get(id)?.color ?? '#888';
     const inGame = () => roster.filter((id) => !st.out.has(id));
     const thievesLeft = () => inGame().filter((id) => roles.get(id) === 'thief');
-    const note = (id, label, sub, c) => st.privateNotes.get(id)?.unshift({ label, sub, color: c });
+    const note = (id, label, sub, c, art) => st.privateNotes.get(id)?.unshift({ label, sub, color: c, art, artColor: c });
     // What each player has reason to believe, for bots: id -> Map(target -> score). Higher = more suspicious.
     const susp = new Map(roster.map((id) => [id, new Map()]));
     const suspect = (id, target, n) => susp.get(id)?.set(target, (susp.get(id).get(target) ?? 0) + n);
@@ -150,7 +159,7 @@ export default {
         const others = inGame().filter((o) => o !== id && st.room.get(o) === st.room.get(id));
         st.lastSeen.set(id, others.map(name));
         const r = roomById.get(st.room.get(id));
-        note(id, `Night ${st.night}: ${r.label}`, others.length ? `With ${others.map(name).join(', ')}` : 'You were alone.', r.color);
+        note(id, `Night ${st.night}: ${r.label}`, others.length ? `With ${others.map(name).join(', ')}` : 'You were alone.', r.color, `room:${r.id}`);
       }
 
       for (const id of thievesLeft()) {
@@ -160,7 +169,7 @@ export default {
         if (move === 'steal') {
           if (guarded.has(roomId)) {
             log.foiled.push(roomId);
-            note(id, 'Foiled!', `The ${r.label} was guarded. No gem.`, ROLES.thief.color);
+            note(id, 'Foiled!', `The ${r.label} was guarded. No gem.`, ROLES.thief.color, 'shield');
             continue;
           }
           st.gems++;
@@ -170,7 +179,7 @@ export default {
           for (const w of witnesses) {
             const decoys = inGame().filter((o) => o !== id && o !== w);
             const pair = shuffle([id, pick(decoys)].filter(Boolean));
-            note(w, 'Evidence: a gem vanished in your room', `It was ${pair.map(name).join(' or ')}.`, '#ffc93c');
+            note(w, 'Evidence: a gem vanished in your room', `It was ${pair.map(name).join(' or ')}.`, '#ffc93c', 'eye');
             for (const o of pair) suspect(w, o, 1);
           }
           // Nobody saw it: a random guest finds a dropped glove instead (true evidence).
@@ -188,9 +197,9 @@ export default {
       for (const [det, target] of st.investigate) {
         const thief = roles.get(target) === 'thief';
         suspect(det, target, thief ? 100 : -100);
-        note(det, `Investigation: ${name(target)}`, thief ? 'is a THIEF.' : 'is not a Thief.', thief ? ROLES.thief.color : ROLES.detective.color);
+        note(det, `Investigation: ${name(target)}`, thief ? 'is a THIEF.' : 'is not a Thief.', thief ? ROLES.thief.color : ROLES.detective.color, 'magnifier');
       }
-      for (const [bg, roomId] of st.guard) note(bg, `You guarded the ${roomById.get(roomId).label}`, log.foiled.includes(roomId) ? 'You stopped a theft!' : 'Quiet night.', ROLES.bodyguard.color);
+      for (const [bg, roomId] of st.guard) note(bg, `You guarded the ${roomById.get(roomId).label}`, log.foiled.includes(roomId) ? 'You stopped a theft!' : 'Quiet night.', ROLES.bodyguard.color, 'shield');
 
       st.nightLog.push(log);
       if (st.gems >= gemsToWin) return win('thieves', `The Thieves stole ${st.gems} gems.`);
@@ -201,7 +210,7 @@ export default {
       const finders = inGame().filter((o) => o !== ofId && roles.get(o) !== 'thief');
       const finder = pick(finders);
       if (!finder) return;
-      note(finder, 'Evidence: you found a glove', `It belongs to ${name(ofId)}.`, '#ffc93c');
+      note(finder, 'Evidence: you found a glove', `It belongs to ${name(ofId)}.`, '#ffc93c', 'glove');
       suspect(finder, ofId, 2);
       st.gloveFound = true; // the TV says "evidence turned up", never whether it was planted
     }
@@ -222,7 +231,7 @@ export default {
         const wasThief = roles.get(id) === 'thief';
         st.verdict = { id, role: roles.get(id), wasThief };
         if (!wasThief) for (const [voter, t] of st.votes) if (t === id) st.noVote.add(voter);
-        if (!wasThief) for (const voter of st.noVote) note(voter, 'You accused an innocent', 'You lose your vote next round.', '#8a93a8');
+        if (!wasThief) for (const voter of st.noVote) note(voter, 'You accused an innocent', 'You lose your vote next round.', '#8a93a8', 'vote');
       }
       enter('verdict');
     }
@@ -278,7 +287,7 @@ export default {
     }
 
     function others(id) {
-      return inGame().filter((o) => o !== id).map((o) => ({ id: o, label: name(o), color: color(o) }));
+      return inGame().filter((o) => o !== id).map((o) => ({ id: o, label: name(o), color: color(o), art: `guest:${o}`, artColor: color(o) }));
     }
 
     function screenFor(id) {
@@ -293,7 +302,7 @@ export default {
 
       if (st.phase === 'end') {
         const won = ROLES[role].team === st.winner;
-        return { title: won ? 'You won!' : 'You lost', tag, lines: [st.winReason] };
+        return { title: won ? 'You won!' : 'You lost', tag, hero: { art: `role:${role}` }, lines: [st.winReason] };
       }
 
       if (st.phase === 'intro') {
@@ -304,7 +313,7 @@ export default {
         }
         lines.push(`Thieves need ${gemsToWin} gems. Dawn comes after night ${MAX_NIGHTS}.`, 'Keep your screen hidden!');
         return {
-          title: 'Your secret role', tag, lines,
+          title: 'Your secret role', tag, hero: { art: `role:${role}`, flip: true }, lines,
           actions: [{ key: 'ready', label: st.ready.has(id) ? 'Ready ✓' : "Got it, I'm ready", disabled: st.ready.has(id) }],
           footer: waiting(),
         };
@@ -312,12 +321,12 @@ export default {
 
       if (st.phase === 'lastGuess') {
         if (id === st.lastGuessBy) {
-          return { title: 'Last guess!', tag, lines: ['Name the Detective. Get it right and the Thieves win.'], choose: { key: 'guess', options: roster.filter((o) => o !== id && !st.out.has(o)).map((o) => ({ id: o, label: name(o), color: color(o) })) }, footer: `${st.left}s` };
+          return { title: 'Last guess!', tag, lines: ['Name the Detective. Get it right and the Thieves win.'], choose: { key: 'guess', options: roster.filter((o) => o !== id && !st.out.has(o)).map((o) => ({ id: o, label: name(o), color: color(o), art: `guest:${o}`, artColor: color(o) })) }, footer: `${st.left}s` };
         }
         return { title: 'Last guess…', tag, lines: [`${name(st.lastGuessBy)} is guessing who the Detective is. Poker face!`] };
       }
       if (out) {
-        return { title: 'Escorted out', tag, lines: ['You can watch, but no talking about your role!'], cards: notesCards(id), footer: '' };
+        return { title: 'Escorted out', tag, hero: { art: `role:${role}`, small: true }, lines: ['You can watch, but no talking about your role!'], cards: notesCards(id), footer: '' };
       }
 
       if (st.phase === 'night') {
@@ -326,7 +335,7 @@ export default {
           return {
             title: `Night ${st.night}`, tag,
             lines: ['Where do you spend the night?'],
-            choose: { key: 'room', options: ROOMS.map((r) => ({ id: r.id, label: r.label, color: r.color })) },
+            choose: { key: 'room', options: ROOMS.map((r) => ({ id: r.id, label: r.label, color: r.color, art: `room:${r.id}` })) },
             footer: `${st.left}s`,
           };
         }
@@ -338,9 +347,9 @@ export default {
             choose: {
               key: 'move',
               options: [
-                { id: 'steal', label: 'Steal a gem', sub: 'Anyone in your room may notice. Fails if the room is guarded.' },
-                { id: 'lie', label: 'Lie low', sub: 'Do nothing suspicious tonight.' },
-                ...others(id).filter((o) => roles.get(o.id) !== 'thief').map((o) => ({ id: `plant:${o.id}`, label: `Plant evidence on ${o.label}`, sub: 'A guest finds "their" glove.', color: o.color })),
+                { id: 'steal', art: 'steal', label: 'Steal a gem', sub: 'Anyone in your room may notice. Fails if the room is guarded.' },
+                { id: 'lie', art: 'lie', label: 'Lie low', sub: 'Do nothing suspicious tonight.' },
+                ...others(id).filter((o) => roles.get(o.id) !== 'thief').map((o) => ({ id: `plant:${o.id}`, art: 'plant', label: `Plant evidence on ${o.label}`, sub: 'A guest finds "their" glove.', color: o.color })),
               ],
             },
             actions: [back],
@@ -350,7 +359,7 @@ export default {
           return { title: `Night ${st.night}`, tag, lines: [`You're in the ${here}. Who do you investigate?`], choose: { key: 'investigate', options: others(id) }, actions: [back] };
         }
         if (role === 'bodyguard' && !st.guard.has(id)) {
-          return { title: `Night ${st.night}`, tag, lines: [`You're in the ${here}. Which room do you guard?`], choose: { key: 'guard', options: ROOMS.map((r) => ({ id: r.id, label: r.label, color: r.color })) }, actions: [back] };
+          return { title: `Night ${st.night}`, tag, lines: [`You're in the ${here}. Which room do you guard?`], choose: { key: 'guard', options: ROOMS.map((r) => ({ id: r.id, label: r.label, color: r.color, art: `room:${r.id}` })) }, actions: [back] };
         }
         const extra = role === 'detective' && !detectiveCanAct() ? ' You rest tonight (you investigate every other night).' : '';
         return { title: `Night ${st.night}`, tag, lines: [`You're in the ${here}. Sleep tight.${extra}`], actions: [back], footer: waiting() };
@@ -376,7 +385,7 @@ export default {
         if (st.noVote.has(id)) return { title: 'Vote', tag, lines: ['You lost your vote this round.'], footer: waiting() };
         return {
           title: 'Vote', tag, lines: ['Who should be escorted out? Votes are revealed together.'],
-          choose: { key: 'vote', selected: st.votes.get(id), options: [...others(id), { id: 'nobody', label: 'Nobody', sub: 'Skip this round' }] },
+          choose: { key: 'vote', selected: st.votes.get(id), options: [...others(id), { id: 'nobody', art: 'nobody', label: 'Nobody', sub: 'Skip this round' }] },
           footer: waiting(),
         };
       }
@@ -537,7 +546,7 @@ export default {
       },
 
       playerView(id) {
-        return { status: '', screen: screenFor(id) };
+        return { status: '', screen: { ...screenFor(id), art: 'gala' } };
       },
 
       isOver: () => st.over,
