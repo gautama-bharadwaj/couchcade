@@ -2,7 +2,8 @@
 // island, harvest what it grows, trade with each other and build their way to 8 points.
 // The TV shows the island; each phone is a private hand with build, trade and bottle buttons.
 //
-// The island is a hex map (19 tiles for up to 4 players, 30 with twin volcanoes for 5–6).
+// The island is a hex map (19 tiles for up to 4 players, 30 with two volcanoes for 5–6), shuffled
+// every game, volcanoes included.
 // Each land tile grows one resource and carries a number; the volcano grows nothing.
 //   • Setup: in turn order and back again, everyone places a Hut and a Trail next to it.
 //     The second Hut pays out one of each resource around it.
@@ -1324,13 +1325,14 @@ export function makeBoard(big) {
     }
   }
 
-  // Volcano(es) in the middle; everything else grows something.
-  const byDist = [...tiles].sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
-  const volcanoes = big ? [byDist[0].id, byDist[1].id] : [byDist[0].id];
+  // The volcano lands anywhere (two on the big island, never side by side); everything else grows
+  // something.
+  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < S3 + 0.01;
+  const [first, ...rest] = shuffle(tiles);
+  const volcanoes = big ? [first.id, rest.find((t) => !near(t, first)).id] : [first.id];
   const land = tiles.filter((t) => !volcanoes.includes(t.id));
   const resCounts = big ? { wood: 6, coco: 6, fish: 6, shell: 5, stone: 5 } : { wood: 4, coco: 4, fish: 4, shell: 3, stone: 3 };
   const nums = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12, ...(big ? [2, 3, 4, 5, 6, 8, 9, 10, 11, 12] : [])];
-  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < S3 + 0.01;
   for (let tries = 0; tries < 400; tries++) {
     const res = shuffle(Object.entries(resCounts).flatMap(([r, k]) => Array(k).fill(r)));
     const ns = shuffle(nums);
