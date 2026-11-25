@@ -68,7 +68,7 @@ const END_SECONDS = 10;
 export default {
   id: 'tidewake',
   title: 'Tidewake',
-  category: 'board',
+  tab: 'board',
   icon: '🌋',
   description: 'Harvest a volcanic island, trade with everyone and build to 8 points.',
   minPlayers: 2,

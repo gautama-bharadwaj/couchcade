@@ -122,14 +122,42 @@ function onPhase(msg) {
   if (msg.phase === 'results' && msg.results) renderResults(msg.results);
 }
 
-// Game picker: one tile per registered game (any number; the grid wraps), in the server's order,
-// which groups games by category. The selected game's description shows under the grid.
+// Game picker: tabs (Board & Card, Arcade) over a grid of the open tab's games. The open tab is
+// always the selected game's tab, so the TV and the host's phone agree; picking a tab selects the
+// game last picked there (or its first game). The selected game's description shows under the grid.
 let shownGameId = null;
+const lastPick = {}; // tab id -> game id
+const tabGames = (msg, tab) => msg.games.filter((g) => g.tab === tab);
+const openTab = (msg) => msg.games.find((g) => g.id === msg.gameId)?.tab ?? msg.tabs[0]?.id;
+
+function selectTab(tab) {
+  const games = tabGames(phase, tab);
+  const id = games.some((g) => g.id === lastPick[tab]) ? lastPick[tab] : games[0]?.id;
+  if (id && id !== phase.gameId) sendCmd({ t: 'select', gameId: id });
+}
+
 function renderGames(msg) {
-  const list = $('games');
   const players = msg.players.filter((p) => p.connected).length;
+  const open = openTab(msg);
+  lastPick[open] = msg.gameId;
+
+  const tabs = $('gameTabs');
+  tabs.innerHTML = '';
+  for (const t of msg.tabs) {
+    const n = tabGames(msg, t.id).length;
+    if (!n) continue;
+    const b = document.createElement('button');
+    b.className = t.id === open ? 'on' : '';
+    b.innerHTML = '<span></span> <small></small>';
+    b.firstChild.textContent = t.label;
+    b.lastChild.textContent = n;
+    b.addEventListener('click', () => selectTab(t.id));
+    tabs.append(b);
+  }
+
+  const list = $('games');
   list.innerHTML = '';
-  for (const g of msg.games) {
+  for (const g of tabGames(msg, open)) {
     const li = document.createElement('li');
     if (g.id === msg.gameId) li.className = 'sel';
     li.innerHTML = '<span class="icon"></span><div><div class="t"></div><div class="m"></div></div>';
@@ -137,7 +165,7 @@ function renderGames(msg) {
     li.querySelector('.t').textContent = g.title;
     const short = players > 0 && players < g.minPlayers;
     const m = li.querySelector('.m');
-    m.textContent = `${titleCase(g.category)} · ${short ? `needs ${g.minPlayers}+` : playerRange(g)}`;
+    m.textContent = short ? `needs ${g.minPlayers}+` : `${playerRange(g)} players`;
     m.classList.toggle('short', short);
     li.addEventListener('click', () => sendCmd({ t: 'select', gameId: g.id }));
     list.append(li);
@@ -157,12 +185,18 @@ function renderGames(msg) {
   }
 }
 
-const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const playerRange = (g) => (g.minPlayers === g.maxPlayers ? `${g.minPlayers}` : `${g.minPlayers}–${g.maxPlayers}`);
 
-/** Arrow keys move through the picker grid: ←/→ one tile, ↑/↓ one row (as many tiles as fit across). */
+/** Tab switches to the next picker tab (Shift+Tab the previous one). */
+function cycleTab(dir) {
+  const tabs = phase.tabs.filter((t) => tabGames(phase, t.id).length);
+  const i = tabs.findIndex((t) => t.id === openTab(phase));
+  selectTab(tabs[(i + dir + tabs.length) % tabs.length].id);
+}
+
+/** Arrow keys move through the open tab's grid: ←/→ one tile, ↑/↓ one row (as many tiles as fit across). */
 function moveSelection(key) {
-  const games = phase.games;
+  const games = tabGames(phase, openTab(phase));
   const cols = getComputedStyle($('games')).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
   const step = { arrowleft: -1, arrowright: 1, arrowup: -cols, arrowdown: cols }[key];
   const i = games.findIndex((g) => g.id === phase.gameId);
@@ -375,6 +409,10 @@ window.addEventListener('keydown', (e) => {
   if (phase.phase === 'lobby' && key.startsWith('arrow')) {
     e.preventDefault(); // the lobby scrolls in a short window; arrows pick games instead
     moveSelection(key);
+  }
+  if (phase.phase === 'lobby' && key === 'tab') {
+    e.preventDefault();
+    cycleTab(e.shiftKey ? -1 : 1);
   }
   if (phase.phase === 'lobby' && key === 'enter') sendCmd({ t: 'start' });
   if (phase.phase === 'lobby' && key === 'b') sendCmd({ t: e.shiftKey ? 'removeBot' : 'addBot' });
