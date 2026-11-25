@@ -79,7 +79,19 @@
 //     },                                   // (drawn after input, before the wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
+//     art: 'tidewake',                     // drawn art for this screen (see below)
 //   }
+//
+// Drawn art (optional): `art` names a module in public/art/<name>.js that the phone loads and uses
+// to draw pictures instead of plain labels. Its exports are all optional:
+//   drawNamed(g, name, x, y, size, color?)   an icon centred in a size x size square
+//   drawCard(g, name, x, y, w, h, count)     a playing card (a locked tally shows these)
+//   mapTile(g, art, x, y, r, seed), mapPiece(g, art, x, y, k, color), mapRoad(g, x1, y1, x2, y2,
+//   color, k), mapHarbor(g, x, y, k, art), mapCover(g, x, y, r)   pictures for the hexmap
+// Then these fields draw with it: tally rows `art`; choose options `art`, `artColor`, and
+// `costs: [names]` (a row of icons); cards `art`, `artColor`, `icons: [names]`; hexmap tiles,
+// buildings and harbors `art`. Until the module loads (or if it fails) the labels show, so keep
+// them readable. The TV renderer can import the same module for a matching look.
 //
 // Rules (optional): a short how-to-play intro, played on the TV when the game starts, for about
 // 30–60 s in all. Each step is a title and a sentence or two (the narrator reads them, the phones

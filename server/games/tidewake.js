@@ -2,7 +2,8 @@
 // island, harvest what it grows, trade with each other and build their way to 8 points.
 // The TV shows the island; each phone is a private hand with build, trade and bottle buttons.
 //
-// The island is a hex map (19 tiles for up to 4 players, 30 with twin volcanoes for 5–6).
+// The island is a hex map (19 tiles for up to 4 players, 30 with two volcanoes for 5–6), shuffled
+// every game, volcanoes included.
 // Each land tile grows one resource and carries a number; the volcano grows nothing.
 //   • Setup: in turn order and back again, everyone places a Hut and a Trail next to it.
 //     The second Hut pays out one of each resource around it.
@@ -76,12 +77,12 @@ export default {
   controller: { type: 'screens' },
   // How to play, shown on the TV at the start (host can skip).
   rules: [
-    { title: 'First to 8 points wins', text: 'Huts are worth 1 point and Lighthouses 2. Build them on the corners of the island tiles.' },
-    { title: 'Roll, harvest, build', text: 'Each turn, roll the dice. Every tile showing that number pays its resource to each building on its corners.' },
-    { title: 'Build on your phone', text: 'Tap a glowing spot on your phone’s map, then confirm. Huts must touch your Trail and can’t sit right next to another Hut.' },
-    { title: 'Trade out loud', text: 'Offer any cards to the table. Others accept, pass or counter, and you pick the deal. Or trade with the bank at 4 for 1, better at a harbor.' },
-    { title: 'Seven erupts the volcano', text: 'Anyone holding more than 7 cards loses half. The roller drifts the Ash Cloud onto a tile and steals a card from someone there.' },
-    { title: 'Bottles and awards', text: 'Buy a Message in a Bottle for a surprise. Explorer is worth 2 points for the longest reach, Trader 1 point for the most deals.' },
+    { title: 'First to 8 points wins', art: 'goal', text: 'Huts are worth 1 point and Lighthouses 2. Build them on the corners of the island tiles.' },
+    { title: 'Roll, harvest, build', art: 'harvest', text: 'Each turn, roll the dice. Every tile showing that number pays its resource to each building on its corners.' },
+    { title: 'Build on your phone', art: 'build', text: 'Tap a glowing spot on your phone’s map, then confirm. Huts must touch your Trail and can’t sit right next to another Hut.' },
+    { title: 'Trade out loud', art: 'trade', text: 'Offer any cards to the table. Others accept, pass or counter, and you pick the deal. Or trade with the bank at 4 for 1, better at a harbor.' },
+    { title: 'Seven erupts the volcano', art: 'erupt', text: 'Anyone holding more than 7 cards loses half. The roller drifts the Ash Cloud onto a tile and steals a card from someone there.' },
+    { title: 'Bottles and awards', art: 'bottles', text: 'Buy a Message in a Bottle for a surprise. Explorer is worth 2 points for the longest reach, Trader 1 point for the most deals.' },
   ],
 
   create({ players }) {
@@ -424,7 +425,7 @@ export default {
       P.get(a).deals++;
       P.get(b).deals++;
       say(`${name(a)} traded ${fmt(aGive)} to ${name(b)} for ${fmt(aGet)}`);
-      fx('deal', { by: a, with: b });
+      fx('deal', { by: a, with: b, give: aGive, get: aGet });
       st.offer = null;
       st.drafts.clear();
       st.mode = null;
@@ -895,10 +896,10 @@ export default {
       // pick = { kind: 'vertex'|'edge'|'tile', list: [ids], sel }
       const m = {
         key: 'spot',
-        tiles: tiles.map((t) => ({ x: r2(t.x), y: r2(t.y), color: t.res ? RINFO[t.res].tileColor : '#4a2a26', label: t.res ? RINFO[t.res].icon : '🌋', num: t.num || null, hot: t.num === 6 || t.num === 8, dim: t.id === st.ash })),
+        tiles: tiles.map((t) => ({ x: r2(t.x), y: r2(t.y), color: t.res ? RINFO[t.res].tileColor : '#4a2a26', label: t.res ? RINFO[t.res].icon : '🌋', art: t.res ?? 'volcano', num: t.num || null, hot: t.num === 6 || t.num === 8, dim: t.id === st.ash })),
         roads: edges.filter((e) => e.owner).map((e) => ({ x1: r2(verts[e.v[0]].x), y1: r2(verts[e.v[0]].y), x2: r2(verts[e.v[1]].x), y2: r2(verts[e.v[1]].y), color: color(e.owner) })),
-        buildings: verts.filter((v) => v.owner).map((v) => ({ x: r2(v.x), y: r2(v.y), color: color(v.owner), kind: v.kind === 'light' ? 'tower' : 'hut' })),
-        harbors: board.harbors.map((h) => ({ x: r2(h.x), y: r2(h.y), label: h.kind === 'any' ? '3:1' : `2:1${RINFO[h.kind].icon}` })),
+        buildings: verts.filter((v) => v.owner).map((v) => ({ x: r2(v.x), y: r2(v.y), color: color(v.owner), kind: v.kind === 'light' ? 'tower' : 'hut', art: v.kind })),
+        harbors: board.harbors.map((h) => ({ x: r2(h.x), y: r2(h.y), label: h.kind === 'any' ? '3:1' : `2:1${RINFO[h.kind].icon}`, art: h.kind })),
         spots: [],
         selected: pick?.sel != null ? String(pick.sel) : null,
       };
@@ -914,26 +915,31 @@ export default {
       return m;
     }
 
-    const handRows = (h) => RES.map((r) => ({ id: r, label: RINFO[r].icon, sub: RINFO[r].name, color: RINFO[r].color, value: h[r] }));
-    const costText = (what) => Object.entries(COST[what]).map(([r, k]) => RINFO[r].icon.repeat(k)).join('');
+    // Phones draw resources and pieces from public/art/tidewake.js (`art` fields); the emoji
+    // labels are only a fallback until it loads.
+    const handRows = (h) => RES.map((r) => ({ id: r, label: RINFO[r].icon, art: r, sub: RINFO[r].name, color: RINFO[r].color, value: h[r] }));
+    const words = (h) => RES.filter((r) => h[r] > 0).map((r) => `${h[r]} ${RINFO[r].name}`).join(', ') || 'nothing';
+    const icons = (h) => RES.flatMap((r) => Array(Math.min(h[r] || 0, 8)).fill(r));
+    const costList = (w) => Object.entries(COST[w]).flatMap(([r, k]) => Array(k).fill(r));
+    const short = (id, w) => words(Object.fromEntries(RES.map((r) => [r, Math.max(0, (COST[w][r] || 0) - P.get(id).hand[r])])));
     const timer = () => `${Math.max(0, st.left)}s`;
 
     function screenFor(id) {
       const p = P.get(id);
       const me = current() === id && st.phase !== 'end';
-      const s = { title: '', lines: [], cards: [], actions: [] };
+      const s = { art: 'tidewake', title: '', lines: [], cards: [], actions: [] };
       const mine = { key: 'none', locked: true, groups: [{ id: 'hand', title: `Your hand · ${vp(id)} point${vp(id) === 1 ? '' : 's'}${secretVp(id) ? ` (${secretVp(id)} secret)` : ''}`, rows: handRows(p.hand) }] };
       const who = name(current());
 
       if (st.phase === 'end') {
-        s.title = st.winner === id ? 'You win! 🎉' : `${name(st.winner)} wins`;
+        s.title = st.winner === id ? 'You win!' : `${name(st.winner)} wins`;
         s.lines.push(`You finished with ${vp(id)} point${vp(id) === 1 ? '' : 's'}.`);
         s.tally = mine;
         return s;
       }
 
       if (st.guide.has(id)) {
-        s.title = '📖 How to play';
+        s.title = 'How to play';
         s.lines = [
           `First to ${GOAL} points wins. Huts are 1 point, Lighthouses 2.`,
           'Each turn: roll the dice. Every tile showing that number pays its resource to each building on its corners (Lighthouses get 2).',
@@ -943,8 +949,8 @@ export default {
           `Awards: Explorer (+2) for trails touching the most tiles (at least ${EXPLORER_MIN}). Trader (+1) for the most deals with other players (at least ${TRADER_MIN}).`,
           'Harbors on the coast let you trade with the bank at 3:1 or 2:1 instead of 4:1.',
         ];
-        for (const w of ['trail', 'hut', 'light', 'bottle']) s.cards.push({ label: `${BUILD[w].icon} ${BUILD[w].name}  ${costText(w)}`, sub: BUILD_TEXT[w] });
-        for (const [k, b] of Object.entries(BOTTLES)) s.cards.push({ label: `${b.icon} ${b.name}`, sub: b.text });
+        for (const w of ['trail', 'hut', 'light', 'bottle']) s.cards.push({ label: BUILD[w].name, art: w, artColor: color(id), icons: costList(w), sub: BUILD_TEXT[w] });
+        for (const [k, b] of Object.entries(BOTTLES)) s.cards.push({ label: b.name, art: 'bottle', sub: b.text });
         s.actions = [{ key: 'back', label: 'Back', style: 'primary' }];
         return s;
       }
@@ -963,7 +969,7 @@ export default {
               { id: 'want', title: 'You get', rows: handRows(draft.want) },
             ],
           };
-          s.cards.push({ label: `You have: ${fmt(p.hand)}` });
+          s.cards.push({ label: 'You have', icons: icons(p.hand) });
           s.actions = [
             { key: 'sendCounter', label: 'Send counter-offer', style: 'primary', disabled: !count(draft.give) || !count(draft.want) || !canGive(id, draft.give) },
             { key: 'cancelCounter', label: 'Back', style: 'secondary' },
@@ -973,10 +979,10 @@ export default {
         }
         const reply = of.replies.get(id);
         s.title = `${name(of.from)} wants to trade`;
-        s.cards.push({ label: `You get: ${fmt(of.give)}`, color: '#3ddc84' }, { label: `You give: ${fmt(of.want)}`, color: '#ff8c42' });
+        s.cards.push({ label: 'You get', icons: icons(of.give), sub: words(of.give), color: '#3ddc84' }, { label: 'You give', icons: icons(of.want), sub: words(of.want), color: '#ff8c42' });
         if (reply === 'yes') s.lines.push(`You said yes. ${name(of.from)} picks who to trade with.`);
         else if (reply === 'no') s.lines.push('You passed.');
-        else if (reply === 'counter') s.lines.push(`Counter-offer sent: you give ${fmt(of.counters.get(id).give)} for ${fmt(of.counters.get(id).want)}.`);
+        else if (reply === 'counter') s.lines.push(`Counter-offer sent: you give ${words(of.counters.get(id).give)} for ${words(of.counters.get(id).want)}.`);
         const can = canGive(id, of.want);
         if (reply !== 'yes') s.actions.push({ key: 'accept', label: can ? 'Accept' : "Accept (you don't have it)", style: 'primary', disabled: !can });
         if (reply !== 'no') s.actions.push({ key: 'decline', label: 'No thanks', style: 'secondary' });
@@ -989,11 +995,11 @@ export default {
         s.title = 'Tidewake';
         s.lines.push(statusLine(who));
         const g = st.gains.get(id);
-        if (g) s.lines.push(`The roll paid you ${fmt(g)}.`);
-        if (st.stolen && st.stolen.from === id && st.event?.kind === 'steal') s.lines.push(`${name(st.stolen.by)} stole your ${RINFO[st.stolen.res].icon}!`);
+        if (g) s.cards.push({ label: 'The roll paid you', icons: icons(g), color: '#3ddc84' });
+        if (st.stolen && st.stolen.from === id && st.event?.kind === 'steal') s.cards.push({ label: `${name(st.stolen.by)} stole your ${RINFO[st.stolen.res].name}!`, art: st.stolen.res, color: '#ff8c8c' });
         s.tally = mine;
         bottleCards(id, s);
-        s.actions.push({ key: 'guide', label: '📖 How to play', style: 'secondary' });
+        s.actions.push({ key: 'guide', label: 'How to play', style: 'secondary' });
         return s;
       }
 
@@ -1012,12 +1018,12 @@ export default {
         s.title = 'Your turn';
         s.tally = mine;
         bottleCards(id, s);
-        s.actions.push({ key: 'roll', label: '🎲 Roll the dice', style: 'primary' });
-        s.actions.push({ key: 'guide', label: '📖 How to play', style: 'secondary' });
+        s.actions.push({ key: 'roll', label: 'Roll the dice', style: 'primary' });
+        s.actions.push({ key: 'guide', label: 'How to play', style: 'secondary' });
         return s;
       }
       if (st.phase === 'ash') {
-        s.title = '🌋 Drift the Ash Cloud';
+        s.title = 'Drift the Ash Cloud';
         s.lines.push('Pick a tile to cover. It grows nothing until the cloud moves, and you steal a card from someone with a building there.');
         s.hexmap = mapView(id, { kind: 'tile', list: spots(id, 'ash'), sel: st.mode?.kind === 'ash' ? st.mode.sel : null });
         s.actions.push({ key: 'build', label: 'Cover this tile', style: 'primary', disabled: st.mode?.kind !== 'ash' || st.mode.sel == null });
@@ -1031,39 +1037,43 @@ export default {
 
       // Main phase.
       const m = st.mode;
-      const rolled = st.dice ? `🎲 ${st.dice[0] + st.dice[1]}` : '';
+      const rolled = st.dice ? `· rolled ${st.dice[0] + st.dice[1]}` : '';
       if (!m) {
         s.title = `Your turn ${rolled}`;
         const g = st.gains.get(id);
-        if (g) s.lines.push(`The roll paid you ${fmt(g)}.`);
+        if (g) s.cards.push({ label: 'The roll paid you', icons: icons(g), color: '#3ddc84' });
         s.tally = mine;
         s.choose = {
           key: 'pick',
           options: ['trail', 'hut', 'light', 'bottle'].map((w) => ({
             id: w,
-            label: `${BUILD[w].icon} ${w === 'bottle' ? 'Buy a Bottle' : `Build a ${BUILD[w].name}`}`,
-            sub: `${costText(w)}${canBuild(id, w) ? '' : `  · ${whyNot(id, w)}`}`,
+            label: w === 'bottle' ? 'Buy a Bottle' : `Build a ${BUILD[w].name}`,
+            art: w,
+            artColor: color(id),
+            costs: costList(w),
+            sub: canBuild(id, w) ? 'Ready' : whyNot(id, w),
             disabled: !canBuild(id, w),
           })),
         };
         bottleCards(id, s);
-        s.actions.push({ key: 'trade', label: '🤝 Trade with players', style: 'secondary', disabled: count(p.hand) === 0 });
-        s.actions.push({ key: 'bank', label: '🏦 Trade with the bank', style: 'secondary', disabled: !RES.some((r) => p.hand[r] >= rate(id, r)) });
-        if (playable(id).length) s.actions.push({ key: 'bottles', label: '🍾 Open a Bottle', style: 'secondary' });
+        s.actions.push({ key: 'trade', label: 'Trade with players', style: 'secondary', disabled: count(p.hand) === 0 });
+        s.actions.push({ key: 'bank', label: 'Trade with the bank', style: 'secondary', disabled: !RES.some((r) => p.hand[r] >= rate(id, r)) });
+        if (playable(id).length) s.actions.push({ key: 'bottles', label: 'Open a Bottle', style: 'secondary' });
         s.actions.push({ key: 'end', label: 'End turn', style: 'primary' });
-        s.actions.push({ key: 'guide', label: '📖 How to play', style: 'secondary' });
+        s.actions.push({ key: 'guide', label: 'How to play', style: 'secondary' });
         return s;
       }
       if (m.kind === 'gotBottle') {
         const b = BOTTLES[m.bottle];
-        s.title = `${b.icon} ${b.name}`;
+        s.title = b.name;
+        s.cards.push({ label: 'Message in a Bottle', art: 'bottle', color: '#8fd3ff' });
         s.lines.push(b.text, m.bottle === 'treasure' ? 'It counts for you right away, and nobody else knows.' : 'You can open it on a later turn.');
         s.actions.push({ key: 'ok', label: 'Got it', style: 'primary' });
         return s;
       }
       if (m.kind === 'build' || m.kind === 'calm') {
         const what = m.kind === 'calm' ? 'trail' : m.what;
-        s.title = m.kind === 'calm' ? `⛵ Free Trail (${st.freeTrails} left)` : `${BUILD[what].icon} Build a ${BUILD[what].name}`;
+        s.title = m.kind === 'calm' ? `Free Trail (${st.freeTrails} left)` : `Build a ${BUILD[what].name}`;
         s.lines.push(what === 'trail' ? 'Tap a glowing edge, then confirm.' : what === 'light' ? 'Tap one of your Huts to upgrade.' : 'Tap a glowing corner, then confirm.');
         s.hexmap = mapView(id, { kind: what === 'trail' ? 'edge' : 'vertex', list: spots(id, what), sel: m.sel });
         s.actions.push({ key: 'build', label: 'Build here', style: 'primary', disabled: m.sel == null });
@@ -1071,7 +1081,7 @@ export default {
         return s;
       }
       if (m.kind === 'trade') {
-        s.title = '🤝 Make an offer';
+        s.title = 'Make an offer';
         s.lines.push('Set what you give and what you want. Everyone else can accept, pass or counter.');
         s.tally = {
           key: 'tally',
@@ -1080,14 +1090,14 @@ export default {
             { id: 'want', title: 'You want', rows: handRows(m.want) },
           ],
         };
-        s.cards.push({ label: `You have: ${fmt(p.hand)}` });
+        s.cards.push({ label: 'You have', icons: icons(p.hand) });
         s.actions.push({ key: 'offer', label: 'Offer to everyone', style: 'primary', disabled: !count(m.give) || !count(m.want) });
         s.actions.push({ key: 'cancel', label: 'Cancel', style: 'secondary' });
         return s;
       }
       if (m.kind === 'offer' && of) {
-        s.title = '🤝 Your offer';
-        s.cards.push({ label: `You give: ${fmt(of.give)}`, color: '#ff8c42' }, { label: `You get: ${fmt(of.want)}`, color: '#3ddc84' });
+        s.title = 'Your offer';
+        s.cards.push({ label: 'You give', icons: icons(of.give), sub: words(of.give), color: '#ff8c42' }, { label: 'You get', icons: icons(of.want), sub: words(of.want), color: '#3ddc84' });
         const opts = [];
         for (const o of order) {
           if (o === id) continue;
@@ -1095,7 +1105,7 @@ export default {
           if (r === 'yes') opts.push({ id: `yes:${o}`, label: `Trade with ${name(o)}`, sub: 'Accepted your offer', color: color(o), disabled: !canGive(id, of.give) });
           if (r === 'counter') {
             const c = of.counters.get(o);
-            opts.push({ id: `counter:${o}`, label: `${name(o)}'s counter`, sub: `You give ${fmt(c.want)}, you get ${fmt(c.give)}`, color: color(o), disabled: !canGive(id, c.want) || !canGive(o, c.give) });
+            opts.push({ id: `counter:${o}`, label: `${name(o)}'s counter`, sub: `You give ${words(c.want)}, you get ${words(c.give)}`, color: color(o), disabled: !canGive(id, c.want) || !canGive(o, c.give) });
           }
         }
         if (opts.length) s.choose = { key: 'with', options: opts };
@@ -1108,32 +1118,32 @@ export default {
         return s;
       }
       if (m.kind === 'bank') {
-        s.title = '🏦 Trade with the bank';
+        s.title = 'Trade with the bank';
         s.tally = mine;
         if (!m.give) {
           s.lines.push('What will you hand over?');
-          s.choose = { key: 'give', options: RES.map((r) => ({ id: r, label: `Give ${rate(id, r)} ${RINFO[r].icon} ${RINFO[r].name}`, sub: `you have ${p.hand[r]}`, color: RINFO[r].color, disabled: p.hand[r] < rate(id, r) })) };
+          s.choose = { key: 'give', options: RES.map((r) => ({ id: r, label: `Give ${rate(id, r)} ${RINFO[r].name}`, art: r, sub: `you have ${p.hand[r]}`, color: RINFO[r].color, disabled: p.hand[r] < rate(id, r) })) };
         } else {
-          s.lines.push(`Give ${rate(id, m.give)} ${RINFO[m.give].icon}. What do you want for it?`);
-          s.choose = { key: 'get', options: RES.filter((r) => r !== m.give).map((r) => ({ id: r, label: `Get 1 ${RINFO[r].icon} ${RINFO[r].name}`, color: RINFO[r].color })) };
+          s.lines.push(`Give ${rate(id, m.give)} ${RINFO[m.give].name}. What do you want for it?`);
+          s.choose = { key: 'get', options: RES.filter((r) => r !== m.give).map((r) => ({ id: r, label: `Get 1 ${RINFO[r].name}`, art: r, color: RINFO[r].color })) };
         }
         s.actions.push({ key: 'cancel', label: 'Done', style: 'secondary' });
         return s;
       }
       if (m.kind === 'bottles') {
-        s.title = '🍾 Open a Bottle';
+        s.title = 'Open a Bottle';
         s.lines.push('One bottle a turn, and not one you bought this turn.');
         s.choose = {
           key: 'use',
-          options: playable(id).map((k) => ({ id: k, label: `${BOTTLES[k].icon} ${BOTTLES[k].name}`, sub: BOTTLES[k].text, disabled: k === 'calm' && !spots(id, 'trail').length })),
+          options: playable(id).map((k) => ({ id: k, label: BOTTLES[k].name, art: 'bottle', sub: BOTTLES[k].text, disabled: k === 'calm' && !spots(id, 'trail').length })),
         };
         s.actions.push({ key: 'cancel', label: 'Cancel', style: 'secondary' });
         return s;
       }
       if (m.kind === 'current' || m.kind === 'monkey') {
-        s.title = m.kind === 'current' ? `🌊 Take ${m.left} from the bank` : '🐒 Which resource?';
+        s.title = m.kind === 'current' ? `Take ${m.left} from the bank` : 'Which resource?';
         s.lines.push(m.kind === 'current' ? 'Pick a resource. You can pick the same one twice.' : 'Every other player hands you 1 of it, if they have any.');
-        s.choose = { key: 'res', options: RES.map((r) => ({ id: r, label: `${RINFO[r].icon} ${RINFO[r].name}`, color: RINFO[r].color })) };
+        s.choose = { key: 'res', options: RES.map((r) => ({ id: r, label: RINFO[r].name, art: r, color: RINFO[r].color })) };
         s.tally = mine;
         return s;
       }
@@ -1147,19 +1157,19 @@ export default {
       if (!p.bottles.length) return;
       const counts = {};
       for (const b of p.bottles) counts[b.kind] = (counts[b.kind] || 0) + 1;
-      for (const [k, c] of Object.entries(counts)) s.cards.push({ label: `${BOTTLES[k].icon} ${BOTTLES[k].name}${c > 1 ? ` ×${c}` : ''}`, sub: BOTTLES[k].text, color: '#8fd3ff' });
+      for (const [k, c] of Object.entries(counts)) s.cards.push({ label: `${BOTTLES[k].name}${c > 1 ? ` ×${c}` : ''}`, art: 'bottle', sub: BOTTLES[k].text, color: '#8fd3ff' });
     }
 
     function whyNot(id, w) {
       const p = P.get(id);
-      if (w === 'bottle' && !deck.length) return 'none left';
-      if (!canPay(id, COST[w])) return 'need more';
-      if (w === 'hut' && p.huts >= LIMIT.hut) return 'all built';
-      if (w === 'light' && p.lights >= LIMIT.light) return 'all built';
-      if (w === 'light') return 'no Hut to upgrade';
-      if (w === 'hut') return 'no open spot on your trails';
-      if (w === 'trail' && p.trails >= LIMIT.trail) return 'all built';
-      return 'nowhere to build';
+      if (w === 'bottle' && !deck.length) return 'None left';
+      if (!canPay(id, COST[w])) return `Need ${short(id, w)}`;
+      if (w === 'hut' && p.huts >= LIMIT.hut) return 'All built';
+      if (w === 'light' && p.lights >= LIMIT.light) return 'All built';
+      if (w === 'light') return 'No Hut to upgrade';
+      if (w === 'hut') return 'No open spot on your Trails';
+      if (w === 'trail' && p.trails >= LIMIT.trail) return 'All built';
+      return 'Nowhere to build';
     }
 
     function statusLine(who) {
@@ -1199,7 +1209,8 @@ export default {
         let highlight = null;
         if (sel != null && st.phase !== 'end') {
           const kind = st.phase === 'ash' ? 'tile' : st.mode.kind === 'calm' || (st.phase === 'setup' ? st.step === 'trail' : st.mode.what === 'trail') ? 'edge' : 'vertex';
-          highlight = { kind, id: sel };
+          const what = kind === 'tile' ? 'ash' : kind === 'edge' ? 'trail' : st.phase === 'setup' ? 'hut' : st.mode.what;
+          highlight = { kind, id: sel, what };
         }
         return {
           phase: st.phase,
@@ -1208,6 +1219,8 @@ export default {
           left: st.left,
           limit: st.phase === 'setup' ? SETUP_SECONDS : st.phase === 'roll' ? ROLL_SECONDS : st.phase === 'main' ? TURN_SECONDS : st.phase === 'end' ? END_SECONDS : CHOICE_SECONDS,
           goal: GOAL,
+          // Full rounds played since setup; the TV turns day into dusk and night with it.
+          round: Math.max(0, Math.floor((st.turnNo - 1) / order.length)),
           dice: st.dice,
           rollSeq: st.rollSeq,
           tiles: tiles.map((t) => ({ x: t.x, y: t.y, res: t.res, num: t.num })),
@@ -1312,13 +1325,14 @@ export function makeBoard(big) {
     }
   }
 
-  // Volcano(es) in the middle; everything else grows something.
-  const byDist = [...tiles].sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
-  const volcanoes = big ? [byDist[0].id, byDist[1].id] : [byDist[0].id];
+  // The volcano lands anywhere (two on the big island, never side by side); everything else grows
+  // something.
+  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < S3 + 0.01;
+  const [first, ...rest] = shuffle(tiles);
+  const volcanoes = big ? [first.id, rest.find((t) => !near(t, first)).id] : [first.id];
   const land = tiles.filter((t) => !volcanoes.includes(t.id));
   const resCounts = big ? { wood: 6, coco: 6, fish: 6, shell: 5, stone: 5 } : { wood: 4, coco: 4, fish: 4, shell: 3, stone: 3 };
   const nums = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12, ...(big ? [2, 3, 4, 5, 6, 8, 9, 10, 11, 12] : [])];
-  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < S3 + 0.01;
   for (let tries = 0; tries < 400; tries++) {
     const res = shuffle(Object.entries(resCounts).flatMap(([r, k]) => Array(k).fill(r)));
     const ns = shuffle(nums);
