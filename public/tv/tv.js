@@ -2,7 +2,7 @@
 // Each game's drawing lives in /tv/games/<id>.js — this file has no game-specific code.
 //
 // Keys (any keyboard on the computer driving the TV):
-//   arrows pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc end game / skip results · F full screen · J join card during a game · I switch join address
+//   arrows pick a game · B add bot (Shift+B remove) · Enter start · M mute · N narrator on/off · L latency overlay · Esc twice end game, once skip results · F full screen · J join card during a game · I switch join address
 //   During a game's how-to-play: S, Esc or Enter skip · ←/→ step · R replays it mid-game
 
 import { renderers } from './games/index.js';
@@ -460,5 +460,17 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (key === 'r' && phase.phase === 'playing' && phase.rules) sendCmd({ t: 'rules', do: 'show' });
-  if (key === 'escape') sendCmd({ t: 'end' });
+  if (key === 'escape') endFromTv();
 });
+
+// Esc ends a game for everyone, which would throw away a long board game, so mid-game it takes
+// a second press within a few seconds. On the results screen one press skips ahead as before.
+let escArmedUntil = 0;
+function endFromTv() {
+  if (phase?.phase !== 'playing' || performance.now() < escArmedUntil) {
+    escArmedUntil = 0;
+    return sendCmd({ t: 'end' });
+  }
+  escArmedUntil = performance.now() + 3000;
+  showToast('Press Esc again to end the game for everyone');
+}

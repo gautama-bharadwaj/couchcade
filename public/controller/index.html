@@ -173,6 +173,12 @@
     #rulesSheet .acts { display: grid; gap: 8px; margin-top: 4px; }
     body:not(.host) #rulesTvBtn { display: none; }
 
+    /* Header buttons: a 44 px tap area (a fingertip), however small the label looks. */
+    #endBtn, #rulesBtn { min-height: 44px; min-width: 44px; padding: 8px 12px; }
+    #endBtn.armed { background: #ff5a5f; border-color: #ff5a5f; color: #0d0f14; font-weight: 800; }
+    /* Connection lost: grey the screen out under the banner so taps aren't wasted. */
+    body.offline .screen.active, body.offline #endBtn, body.offline #rulesBtn { opacity: .35; pointer-events: none; }
+    body.offline #conn { bottom: auto; top: 40%; font-size: 1.3rem; font-weight: 800; color: #f2f4f8; }
     #conn { position: fixed; bottom: max(6px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: .8rem; color: var(--muted); pointer-events: none; }
 
     /* Ask for landscape while playing */
