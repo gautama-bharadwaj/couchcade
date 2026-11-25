@@ -91,10 +91,10 @@
 // to draw pictures instead of plain labels. Its exports are all optional:
 //   drawNamed(g, name, x, y, size, color?)   an icon centred in a size x size square
 //   drawCard(g, name, x, y, w, h, count)     a playing card (a locked tally shows these)
-//   drawHero(g, name, x, y, w, h), drawHeroBack(g, x, y, w, h)   the big card of `hero`
-//   drawCell(g, art, w, h, cell)             a grid cell's background, w x h from (0, 0)
 //   mapTile(g, art, x, y, r, seed), mapPiece(g, art, x, y, k, color), mapRoad(g, x1, y1, x2, y2,
 //   color, k), mapHarbor(g, x, y, k, art), mapCover(g, x, y, r)   pictures for the hexmap
+//   drawHero(g, name, x, y, w, h), drawHeroBack(g, x, y, w, h)   the big card of a screen's `hero`
+//   drawCell(g, art, w, h, cell)             a grid cell's background (cells with `art`), w x h from (0, 0)
 // Then these fields draw with it: tally rows `art`; choose options `art`, `artColor`, and
 // `costs: [names]` (a row of icons); cards `art`, `artColor`, `icons: [names]`; hexmap tiles,
 // buildings and harbors `art`. Until the module loads (or if it fails) the labels show, so keep

@@ -427,13 +427,13 @@ function renderScreen(screen) {
     if (screen.tag.color) t.style.background = screen.tag.color;
     wrap.append(t);
   }
-  if (screen.hero && art?.drawHero) wrap.append(buildHero(screen.hero, el, art));
   if (screen.swatch) {
     const sw = el('div', 'swatch');
     sw.style.background = screen.swatch.color;
     if (screen.swatch.label) sw.append(el('span', '', screen.swatch.label));
     wrap.append(sw);
   }
+  if (screen.hero && art?.drawHero) wrap.append(buildHero(screen.hero, el, art)); // after tag/swatch
   for (const line of screen.lines ?? []) wrap.append(el('p', '', line));
   if (screen.tally) wrap.append(buildTally(screen.tally, el, art));
 
