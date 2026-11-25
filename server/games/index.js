@@ -49,6 +49,12 @@
 //       pins?: [{ cell, color }],          // other players' markers
 //       locked?: true, small?: true,       // locked = view only; small = a little reference copy
 //     },                                   // (drawn after input, before actions; arrow keys nudge the pick)
+//     grid: {                              // tappable word/tile grid; sends { key, value: cell.id }
+//       key: 'tile', cols: 5, locked?,     // locked = view only
+//       cells: [{ id, label, color?, ink?, // ink = text color
+//                 mark?, dots?: [color],   // mark = small caption; dots = little voter markers
+//                 ring?, dim?, disabled? }],// ring = outline color (your pick)
+//     },                                   // (drawn after input, before the wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
 //   }
@@ -64,9 +70,10 @@ import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import tint from './tint.js';
+import hoard from './hoard.js';
 import sandbox from './sandbox.js';
 
-export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, sandbox];
+export const GAMES = [bumper, stickup, sumo, gala, shed, fuse, potato, pillowfort, tint, hoard, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 

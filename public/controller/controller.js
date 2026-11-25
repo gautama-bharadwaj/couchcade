@@ -328,6 +328,31 @@ function renderScreen(screen) {
     wrap.append(row);
   }
 
+  if (screen.grid) {
+    const { key, cols = 5, cells = [], locked } = screen.grid;
+    const grid = el('div', `grid${locked ? ' locked' : ''}`);
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    for (const c of cells) {
+      const b = el('button', `gcell${c.dim ? ' dim' : ''}${c.ring ? ' ring' : ''}`);
+      b.style.background = c.color ?? '';
+      if (c.ink) b.style.color = c.ink;
+      if (c.ring) b.style.outlineColor = c.ring;
+      const label = el('span', 'w', c.label);
+      if (c.label?.length > 6) label.style.fontSize = `${Math.max(0.46, 0.78 - (c.label.length - 6) * 0.06)}rem`;
+      b.append(label);
+      if (c.mark) b.append(el('span', 'm', c.mark));
+      if (c.dots?.length) {
+        const dots = el('span', 'dots');
+        for (const color of c.dots) dots.append(Object.assign(el('i'), { style: `background:${color}` }));
+        b.append(dots);
+      }
+      b.disabled = !!c.disabled;
+      if (!locked && !c.disabled) b.addEventListener('click', () => act(key, c.id));
+      grid.append(b);
+    }
+    wrap.append(grid);
+  }
+
   if (screen.wheel) wrap.append(buildWheel(screen.wheel, el));
   else wheelNudge = null;
 
