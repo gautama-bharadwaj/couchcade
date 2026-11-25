@@ -1,6 +1,7 @@
-# Builds the downloadable apps and attaches them to a GitHub Release.
+# Builds the downloadable apps and attaches them to a GitHub Release, then publishes the same
+# version to npm (for `npx couchcade`; see the npm job for its one-time setup).
 #
-#   git tag v0.2.0 && git push origin v0.2.0    build all platforms and publish the release
+#   git tag v0.2.0 && git push origin v0.2.0    build all platforms, publish the release and npm
 #   Actions > Release > Run workflow            build only; download the files from the run
 #
 # Each platform builds on its own runner (a single executable embeds that platform's Node),
@@ -35,6 +36,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          [ "$v" = "$GITHUB_REF_NAME" ] || { echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json ($v). Use npm version to bump and tag together."; exit 1; }
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -99,3 +106,39 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Couchcade $TAG" --notes "$notes" --generate-notes
           fi
           gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  # npm, for `npx couchcade`, by trusted publishing: npm checks this workflow's GitHub identity
+  # (OIDC), so there's no npm token to store or renew, and every version gets provenance.
+  # One-time setup on npmjs.com, after the first version exists there: the couchcade package >
+  # Settings > Trusted publishing > GitHub Actions, repository gautama-bharadwaj/couchcade,
+  # workflow release.yml. Until then (or if that version is already published) this job skips
+  # with a note, so a release never fails over npm.
+  npm:
+    name: Publish to npm
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # lets npm verify this run (trusted publishing)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }} # trusted publishing needs npm 11.5.1+, which Node 26 has
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Publish
+        run: |
+          if ! npm view couchcade name > /dev/null 2>&1; then
+            echo "::warning::couchcade isn't on npm yet. Publish the first version by hand, then set up trusted publishing (see the README, Releases)."
+            exit 0
+          fi
+          v="$(node -p "require('./package.json').version")"
+          if npm view "couchcade@$v" version > /dev/null 2>&1; then
+            echo "couchcade@$v is already on npm."
+            exit 0
+          fi
+          npm publish --provenance --access public

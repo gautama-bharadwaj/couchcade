@@ -16,11 +16,11 @@ Get the file for your computer from the [Releases page](https://github.com/gauta
 | Windows | `Couchcade-windows-x64.exe` | Double-click it. A console window shows the addresses; close it to stop. |
 | Linux (x64, or arm64 such as a 64-bit Raspberry Pi) | `couchcade-linux-x64` / `couchcade-linux-arm64` | `chmod +x couchcade-linux-*` and run it. |
 
-The app opens the TV page in your default browser by itself. The downloads aren't signed yet, so the first launch needs one extra click; see [Unsigned downloads](#unsigned-downloads). The Mac app has no window of its own: to stop it, use **Force Quit** (⌥⌘Esc) or Activity Monitor. On an Intel Mac, use `npx` or run it from source.
+The app opens the TV page in your default browser by itself. The downloads aren't signed yet, so the first launch needs one extra click; see [Unsigned downloads](#unsigned-downloads). On a Mac, a small Couchcade window shows the addresses while it runs: **Open TV Page** brings the TV page back and **Quit Couchcade** stops it. On an Intel Mac, use `npx` or run it from source.
 
 ### With Node.js: `npx couchcade`
 
-Once Couchcade is published to npm, any computer with [Node.js](https://nodejs.org) 20 or newer can run:
+Any computer with [Node.js](https://nodejs.org) 20 or newer can run:
 
 ```bash
 npx couchcade          # add --open to open the TV page in your browser
@@ -46,6 +46,43 @@ docker run --rm --network host couchcade                         # Linux only: f
 ```
 
 Phones can't reach a container's own address, so with `-p` the QR code needs `HOST_IP`. With `--network host` (Linux) the container uses the host's network and finds the right address itself.
+
+To keep it running on a server, use `docker compose up -d` with the included `docker-compose.yml`; see [Home server](#home-server-ubuntu-or-any-linux).
+
+### Home server (Ubuntu or any Linux)
+
+Couchcade can run all the time on a home server, so nobody has to start it before game night. The server needs no screen: the TV (a smart TV's browser, a streaming stick with a browser, or a laptop plugged into the TV) opens the server's address, and phones scan the QR code as usual. The server has to be on the same network as the phones.
+
+**With Docker** (easiest to update):
+
+```bash
+git clone https://github.com/gautama-bharadwaj/couchcade.git
+cd couchcade
+docker compose up -d --build       # starts now and after every reboot
+docker compose logs                # shows the TV and phone addresses
+```
+
+To update: `git pull && docker compose up -d --build`. The compose file uses the host's network, so the QR code shows the server's own LAN address (192.168.x.x or similar) and phones connect straight to it. If the code shows the wrong address, set `HOST_IP` in `docker-compose.yml`.
+
+**Without Docker** (systemd): use the Linux download, which includes everything it needs.
+
+```bash
+# x64; use couchcade-linux-arm64 on an ARM server or Raspberry Pi
+sudo curl -L -o /usr/local/bin/couchcade https://github.com/gautama-bharadwaj/couchcade/releases/latest/download/couchcade-linux-x64
+sudo chmod +x /usr/local/bin/couchcade
+sudo curl -L -o /etc/systemd/system/couchcade.service https://raw.githubusercontent.com/gautama-bharadwaj/couchcade/main/deploy/couchcade.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now couchcade
+journalctl -u couchcade -n 20      # shows the TV and phone addresses
+```
+
+To update, download the binary again and `sudo systemctl restart couchcade`. If the server has Node.js 20 or newer, `sudo npm install -g couchcade` works too: point `ExecStart` in the service file at the path `command -v couchcade` prints. (Ubuntu's own `nodejs` package is too old on 24.04 and earlier; use [NodeSource](https://github.com/nodesource/distributions) or the download.)
+
+**Then:**
+
+- On the TV, open `http://<server address>:3000/tv` and press **F** for full screen; press any key or click once so the browser allows sound. Find the server's address with `hostname -I` (the first one is usually it). Giving the server a fixed address in your router's DHCP settings keeps this URL the same, so the TV can bookmark it.
+- If the server runs a firewall: `sudo ufw allow 3000/tcp`.
+- Both setups use port 3000 exactly, so the address never moves; change `PORT` / `--port` if something else uses it.
 
 ### Then
 
@@ -130,7 +167,7 @@ bin/couchcade.js      command-line entry (npx couchcade, the downloads): flags �
 server/
   index.js            HTTP (pages + QR) and WebSocket hub, 60 Hz loop, startup (port, banner)
   address.js          which LAN address goes in the QR code, and the alternatives
-  runtime.js          packaged app or source? (node:sea), opening the browser
+  runtime.js          packaged app or source? (node:sea), opening the browser, the Mac app's window
   log.js              buffered, leveled logging (see Logging)
   lobby.js            who's here
   session.js          shared game flow (pick, start, how-to-play intro, results)
@@ -221,6 +258,10 @@ The downloads are built by `.github/workflows/release.yml`. Push a tag to build 
 npm version minor        # bumps package.json and tags v0.2.0
 git push origin main --follow-tags
 ```
+
+The same workflow then publishes that version to npm (`npx couchcade`) by [trusted publishing](https://docs.npmjs.com/trusted-publishers): npm recognises this repository's release workflow, so there's no npm token to keep. The tag must match the version in `package.json`, which `npm version` takes care of.
+
+The very first version had to be published by hand, because npm only lets you set up trusted publishing for a package that exists. For a new package that is: `npm login`, then `npm publish --access public` from a clean checkout of the tag; then on npmjs.com, the package's **Settings > Trusted publishing**, choose GitHub Actions and enter `gautama-bharadwaj` / `couchcade` / `release.yml`. Until that's done, the npm step skips with a warning instead of failing the release.
 
 To build only for the machine you're on: `npm run build:release` (needs Node 25.5 or newer), which writes `dist/release/`. It bundles the server with esbuild and packs it, Node itself and `public/` into one [single executable application](https://nodejs.org/api/single-executable-applications.html). This is the only build step in the project; development never needs it. `npm run check` runs the smoke test against the source, and `node scripts/smoke.mjs --cmd <binary>` against a build.
 

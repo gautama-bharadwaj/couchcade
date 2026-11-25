@@ -1,0 +1,22 @@
+# Couchcade as an always-on service, for a home server (see "Home server" in the README).
+#
+#   docker compose up -d --build     start it, and again after a git pull to update
+#   docker compose logs -f           see the addresses and the log
+#
+# Then open http://<server's LAN address>:3000/tv on the TV.
+
+services:
+  couchcade:
+    build: .
+    image: couchcade
+    container_name: couchcade
+    restart: unless-stopped # starts again after a crash or a reboot, but not after `docker compose stop`
+    # The host's network, so the QR code shows the server's real LAN address and phones reach it
+    # directly. Linux only (Docker Desktop on Mac/Windows: use the ports + HOST_IP lines instead).
+    network_mode: host
+    environment:
+      PORT: 3000
+      # HOST_IP: 192.168.1.50   # only if the QR code shows the wrong address
+    # Without host networking:
+    # ports: ['3000:3000']
+    # environment: { PORT: 3000, HOST_IP: 192.168.1.50 }   # HOST_IP is required then
