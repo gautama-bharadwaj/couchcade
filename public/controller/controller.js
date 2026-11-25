@@ -154,26 +154,28 @@ function renderLobby(isHost) {
   $('addBotBtn').disabled = phase.players.length >= 8;
 }
 
-// Game picker. Only the host sees the tiles; everyone sees the selected game in the footer.
-// Tabs filter by category (from each game's `category`, so new games need nothing here) and
-// appear once there is more than one category.
-let pickTab = 'all';
+// Game picker. Only the host sees the tabs and tiles; everyone sees the selected game in the footer.
+// Tabs come from the server (Board & Card, then Arcade). The open tab is always the selected
+// game's tab, so the TV follows along; tapping a tab selects the game last picked there (or its first).
+const lastPick = {}; // tab id -> game id
 function renderPicker(isHost) {
   const games = phase.games;
   const players = phase.players.filter((p) => p.connected).length;
-  const cats = [...new Set(games.map((g) => g.category))];
-  if (pickTab !== 'all' && !cats.includes(pickTab)) pickTab = 'all';
+  const open = games.find((g) => g.id === phase.gameId)?.tab ?? phase.tabs[0]?.id;
+  lastPick[open] = phase.gameId;
 
   const tabs = $('tabs');
   tabs.innerHTML = '';
-  tabs.style.display = isHost && cats.length > 1 ? '' : 'none';
-  for (const c of ['all', ...cats]) {
+  tabs.style.display = isHost ? '' : 'none';
+  for (const t of phase.tabs) {
+    const inTab = games.filter((g) => g.tab === t.id);
+    if (!inTab.length) continue;
     const b = document.createElement('button');
-    b.textContent = c === 'all' ? `All ${games.length}` : titleCase(c);
-    if (c === pickTab) b.className = 'on';
+    b.textContent = t.label;
+    if (t.id === open) b.className = 'on';
     b.addEventListener('click', () => {
-      pickTab = c;
-      renderPicker(isHost);
+      const id = inTab.some((g) => g.id === lastPick[t.id]) ? lastPick[t.id] : inTab[0].id;
+      if (id !== phase.gameId) cmd({ t: 'select', gameId: id });
     });
     tabs.append(b);
   }
@@ -182,7 +184,7 @@ function renderPicker(isHost) {
   list.innerHTML = '';
   list.style.display = isHost ? '' : 'none';
   for (const g of games) {
-    if (pickTab !== 'all' && g.category !== pickTab) continue;
+    if (g.tab !== open) continue;
     const b = document.createElement('button');
     if (g.id === phase.gameId) b.className = 'sel';
     b.innerHTML = '<span class="icon"></span><div><div class="t"></div><div class="m"></div></div>';
@@ -204,7 +206,6 @@ function renderPicker(isHost) {
     : '';
 }
 
-const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const playerRange = (g) => (g.minPlayers === g.maxPlayers ? `${g.minPlayers}` : `${g.minPlayers}–${g.maxPlayers}`);
 
 function renderResults(results) {

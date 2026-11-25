@@ -165,6 +165,7 @@ async function main() {
   tv.send({ t: 'hello', role: 'tv' });
   const phase = await next;
   ok(phase.phase === 'lobby' && phase.games.length > 0, 'TV websocket gets the lobby');
+  ok(phase.tabs?.length > 0 && phase.games.every((g) => phase.tabs.some((t) => t.id === g.tab)), 'every game is in a picker tab');
 
   const phone = await wsClient(port);
   next = phone.next('welcome');

@@ -42,7 +42,7 @@ const GOSSIP_MAX_PER_TALK = 2;
 export default {
   id: 'gala',
   title: 'Midnight Gala',
-  category: 'party',
+  tab: 'board',
   icon: '💎',
   description: 'Hidden roles. Find the jewel thieves before dawn.',
   minPlayers: 4,

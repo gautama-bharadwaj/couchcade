@@ -25,6 +25,11 @@
     .tagline { color: var(--muted); margin: 4px 0 4vh; font-size: 1.3rem; }
     h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 12px; }
     /* Game picker: a grid of tiles that wraps to any number of games, plus the selected game's details. */
+    /* Picker tabs: Board & Card first, then Arcade. Tab / Shift+Tab or a click switches. */
+    #gameTabs { display: flex; gap: 10px; margin: 0 0 14px; }
+    #gameTabs button { font: inherit; font-size: 1.2rem; font-weight: 800; padding: 10px 20px; border-radius: 999px; border: 2px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+    #gameTabs button small { font-size: .85rem; font-weight: 700; opacity: .7; margin-left: 4px; }
+    #gameTabs button.on { background: #f2f4f8; border-color: #f2f4f8; color: #0d0f14; }
     #games { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
     #games li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 14px; background: var(--panel); cursor: pointer; min-width: 0; }
     #games li.sel { border-color: var(--accent); background: #1d2333; box-shadow: 0 0 0 4px rgba(255, 201, 60, .14); }
@@ -59,6 +64,8 @@
       #lobby { padding: 4vh 5vw; }
       .logo { font-size: 3rem; }
       .tagline { margin-bottom: 2.5vh; font-size: 1.1rem; }
+      #gameTabs { margin-bottom: 10px; }
+      #gameTabs button { font-size: 1rem; padding: 7px 14px; }
       #games { gap: 8px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
       #games li { padding: 8px 10px; gap: 10px; }
       #games .icon { width: 34px; height: 34px; font-size: 1.2rem; border-radius: 9px; }
@@ -101,7 +108,7 @@
     <div class="left">
       <h1 class="logo">Couch<span>cade</span></h1>
       <p class="tagline">Party games on the big screen. Your phone is the controller.</p>
-      <h2>Games</h2>
+      <div id="gameTabs"></div>
       <ul id="games"></ul>
       <div id="gameInfo"></div>
       <h2>Players</h2>
