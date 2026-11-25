@@ -106,7 +106,7 @@ const ARENAS = [
 export default {
   id: 'stickup',
   title: 'Stickup',
-  category: 'action',
+  tab: 'arcade',
   icon: '🤺',
   description: 'Stick-figure brawl with weapon drops and deadly arenas.',
   minPlayers: 2,

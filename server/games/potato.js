@@ -80,7 +80,7 @@ export default {
   id: 'potato',
   title: 'Hot Potato Pileup',
   description: 'Tackle someone to pass the ticking bomb before it blows. 2–8 players.',
-  category: 'party',
+  tab: 'arcade',
   icon: '🥔',
   minPlayers: 2,
   maxPlayers: 8,

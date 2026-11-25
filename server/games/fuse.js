@@ -59,7 +59,7 @@ const ORD = ['', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 export default {
   id: 'fuse',
   title: 'Fuse',
-  category: 'cards',
+  tab: 'board',
   icon: '💣',
   description: 'Draw from the crate and pray it isn’t a Bomb. Last one standing wins.',
   minPlayers: 2,
