@@ -51,6 +51,12 @@
 //       pins?: [{ cell, color }],          // other players' markers
 //       locked?: true, small?: true,       // locked = view only; small = a little reference copy
 //     },                                   // (drawn after input, before actions; arrow keys nudge the pick)
+//     grid: {                              // tappable word/tile grid; sends { key, value: cell.id }
+//       key: 'tile', cols: 5, locked?,     // locked = view only
+//       cells: [{ id, label, color?, ink?, // ink = text color
+//                 mark?, dots?: [color],   // mark = small caption; dots = little voter markers
+//                 ring?, dim?, disabled? }],// ring = outline color (your pick)
+//     },                                   // (drawn after input, before the wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
 //   }
@@ -74,10 +80,11 @@ import fuse from './fuse.js';
 import potato from './potato.js';
 import pillowfort from './pillowfort.js';
 import tint from './tint.js';
+import hoard from './hoard.js';
 import sandbox from './sandbox.js';
 
 // Order within each tab is the order here. The first Board & Card game is picked when the server starts.
-export const GAMES = [shed, fuse, gala, tint, stickup, bumper, sumo, potato, pillowfort, sandbox];
+export const GAMES = [shed, fuse, gala, tint, hoard, stickup, bumper, sumo, potato, pillowfort, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 

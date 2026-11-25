@@ -111,6 +111,16 @@
     #screen button:disabled { opacity: .4; }
     #screen .swatch { height: 72px; border-radius: 14px; display: flex; align-items: flex-end; padding: 8px 12px; box-shadow: inset 0 0 0 2px rgba(255,255,255,.25); }
     #screen .swatch span { font-weight: 800; font-size: .85rem; padding: 2px 8px; border-radius: 999px; background: rgba(13,15,20,.7); }
+    #screen .grid { display: grid; gap: 4px; }
+    #screen .gcell { position: relative; min-height: 54px; padding: 4px 2px 10px; border-radius: 8px; border: 0; font-weight: 800; font-size: .78rem; letter-spacing: -.02em; color: #2b2418; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); outline: 0 solid transparent; outline-offset: -3px; }
+    #screen .gcell .w { white-space: nowrap; max-width: 100%; overflow: hidden; line-height: 1.05; }
+    #screen .gcell .m { font-size: .55rem; font-weight: 800; text-transform: uppercase; opacity: .8; margin-top: 2px; }
+    #screen .gcell.dim, #screen .gcell.dim:disabled { opacity: .45; }
+    #screen .gcell:disabled { opacity: 1; }
+    #screen .gcell.ring { outline-width: 3px; }
+    #screen .gcell .dots { position: absolute; left: 3px; right: 3px; bottom: 3px; display: flex; gap: 2px; justify-content: center; }
+    #screen .gcell .dots i { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+    #screen .grid:not(.locked) .gcell:not(:disabled):active { transform: scale(.95); }
     #screen .wheel { display: flex; flex-direction: column; align-items: center; gap: 8px; }
     #screen .wheel canvas { touch-action: none; }
     #screen .nudges { display: grid; grid-template-columns: 1fr 1.6fr 1.6fr 1fr; gap: 6px; width: 100%; max-width: 380px; }
