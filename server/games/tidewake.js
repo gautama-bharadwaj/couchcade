@@ -755,7 +755,7 @@ export default {
         const goal = botGoal(bid);
         const nd = need(bid, goal);
         const sp = surplus(bid, goal);
-        const value = (h, sign) => RES.reduce((s, r) => s + (h[r] || 0) * (sign > 0 ? (nd[r] > 0 ? 2 : 0.6) : sp[r] >= (h[r] || 0) ? 0.8 : 2), 0);
+        const value = (h, sign) => RES.reduce((s, r) => s + (h[r] || 0) * (sign > 0 ? (nd[r] > 0 ? 2 : 1) : sp[r] >= (h[r] || 0) ? 0.7 : 1.6), 0);
         const good = value(of.give, 1) >= value(of.want, -1) && publicVp(of.from) < GOAL - 2;
         of.replies.set(bid, good || Math.random() < 0.08 ? 'yes' : 'no');
       }
@@ -1197,7 +1197,7 @@ export default {
           step: st.step,
           turn: st.phase === 'end' ? null : current(),
           left: st.left,
-          limit: st.phase === 'setup' ? SETUP_SECONDS : st.phase === 'roll' ? ROLL_SECONDS : st.phase === 'main' ? TURN_SECONDS : CHOICE_SECONDS,
+          limit: st.phase === 'setup' ? SETUP_SECONDS : st.phase === 'roll' ? ROLL_SECONDS : st.phase === 'main' ? TURN_SECONDS : st.phase === 'end' ? END_SECONDS : CHOICE_SECONDS,
           goal: GOAL,
           dice: st.dice,
           rollSeq: st.rollSeq,

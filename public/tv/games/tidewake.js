@@ -447,10 +447,11 @@ function drawTop(ctx, s, now, playerById) {
   else if (s.phase === 'main') {
     const m = { build: 'is building', calm: 'is laying free Trails', trade: 'is putting together an offer', offer: 'wants to trade', bank: 'is trading with the bank', bottles: 'is opening a Bottle', current: 'rides a Lucky Current', monkey: 'is up to Monkey Business' }[s.mode];
     msg = `${nm} ${m ?? "'s turn"}`.replace(" 's", "'s");
-  } else if (s.phase === 'end') msg = '';
+  } else if (s.phase === 'end') msg = `👑 ${s.players.find((q) => q.id === s.winner)?.name ?? ''} rules the island!`;
   if (msg) {
     roundRect(ctx, 70, 34, 760, 60, 16, 'rgba(10,14,22,0.75)');
-    if (p) circle(ctx, 104, 64, 13, p.color);
+    const who = p ?? playerById.get(s.winner);
+    if (who) circle(ctx, 104, 64, 13, who.color);
     text(ctx, msg, 128, 75, { size: 30, weight: 800, align: 'left' });
     // Turn timer.
     if (s.limit && s.left >= 0) {
