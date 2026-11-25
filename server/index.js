@@ -143,11 +143,12 @@ function notFound(res) {
 //                     {t:'act', key, value?}                players, screens games only
 //                     {t:'select', gameId} {t:'start'} {t:'end'}   host phone or TV only
 //                     {t:'addBot'} {t:'removeBot'}                 host phone or TV, lobby only
+//                     {t:'rules', do}                       host phone or TV: show | next | back | skip
 //                     {t:'ping', at, rtt?}                  rtt = player's last measured round trip
 //                     {t:'clientError', message}            TV or phone script error, for the server log
 //   server -> player  {t:'welcome', id, token, name, color} | {t:'full'}
 //                     {t:'you', data}                       game's playerView, ~10/s, only when it changed
-//   server -> all     {t:'phase', phase, gameId, games, controller, hostId, players, results}
+//   server -> all     {t:'phase', phase, gameId, games, controller, hostId, players, results, rules, intro}
 //   server -> tv      {t:'state', gameId, data, pads}       game snapshot, up to TICK_HZ (unchanged ones are skipped,
 //                                                           with a repeat every TV_KEEPALIVE_MS); pads = buttons held
 //   server -> tv      {t:'net', tickHz, tickMaxMs, players}  latency stats, 1/s (the TV's L overlay)
@@ -259,7 +260,8 @@ function onMessage(ws, msg, addr) {
     case 'start':
     case 'end':
     case 'addBot':
-    case 'removeBot': {
+    case 'removeBot':
+    case 'rules': {
       const isHost = ws.role === 'tv' || (ws.role === 'player' && ws.playerId === lobby.hostId());
       if (!isHost) {
         log.debug('host', `refused '${msg.t}' from non-host #${ws.playerId ?? '?'}`);
@@ -270,9 +272,10 @@ function onMessage(ws, msg, addr) {
         : msg.t === 'start' ? session.start()
         : msg.t === 'addBot' ? session.addBot()
         : msg.t === 'removeBot' ? session.removeBot()
+        : msg.t === 'rules' ? session.rulesCmd(msg.do)
         : session.end();
       if (r?.error) send(ws, { t: 'error', message: r.error });
-      else if (log.debugOn) log.debug('host', `${msg.t}${msg.t === 'select' ? ` ${msg.gameId}` : ''} by ${ws.role === 'tv' ? 'TV' : `#${ws.playerId}`}`);
+      else if (log.debugOn) log.debug('host', `${msg.t}${msg.t === 'select' ? ` ${msg.gameId}` : msg.t === 'rules' ? ` ${String(msg.do).slice(0, 10)}` : ''} by ${ws.role === 'tv' ? 'TV' : `#${ws.playerId}`}`);
       break;
     }
 

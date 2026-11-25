@@ -6,7 +6,7 @@
 //   node scripts/smoke.mjs --port 3200               if 3123 is taken on your machine
 //
 // Checks: pages and game scripts are served (and nothing outside public/), join info and the
-// address switch, /api/logs, a TV and a phone over WebSocket, a busy PORT stops with a clear
+// address switch, /api/logs, a TV and a phone over WebSocket, a game's how-to-play intro, a busy PORT stops with a clear
 // message, and without PORT a busy 3000 falls back to the next free port.
 
 import { spawn } from 'node:child_process';
@@ -182,6 +182,36 @@ async function main() {
   next = tv.next('phase');
   tv.send({ t: 'end' });
   ok((await next).phase !== 'playing', 'the TV can end the game');
+
+  // A game with rules opens with them, paused; only the host or TV can step or skip them.
+  const guest = await wsClient(port);
+  next = guest.next('welcome');
+  guest.send({ t: 'hello', role: 'player', name: 'Guest' });
+  await next;
+  await sleep(200); // let the join's phase message pass
+  tv.send({ t: 'select', gameId: 'fuse' });
+  await sleep(200);
+  next = tv.next('phase');
+  tv.send({ t: 'start' });
+  let p = await next;
+  ok(p.phase === 'playing' && p.intro?.step === 0 && p.rules?.length > 0, 'a game with rules opens with them');
+  next = guest.next('error');
+  guest.send({ t: 'rules', do: 'skip' });
+  ok(/host/.test((await next).message), 'a guest cannot skip the rules');
+  next = tv.next('phase');
+  phone.send({ t: 'rules', do: 'next' });
+  ok((await next).intro?.step === 1, 'the host steps through the rules');
+  next = tv.next('phase');
+  phone.send({ t: 'rules', do: 'skip' });
+  p = await next;
+  ok(p.phase === 'playing' && !p.intro, 'the host skips the rules');
+  next = tv.next('phase');
+  tv.send({ t: 'rules', do: 'show' });
+  ok((await next).intro?.step === 0, 'the TV replays the rules mid-game');
+  next = tv.next('phase');
+  tv.send({ t: 'end' });
+  ok((await next).phase !== 'playing', 'ending during the rules works');
+  guest.close();
   tv.close();
   phone.close();
 

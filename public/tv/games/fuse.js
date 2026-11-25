@@ -110,6 +110,8 @@ function onEvent(s, e, now) {
 
 // ---- Sounds and narration -------------------------------------------------------------
 export default {
+  drawRules, // the how-to-play pictures; the steps themselves are in server/games/fuse.js
+
   onSnapshot(prev, s, audio) {
     const { sfx, say, pick } = audio;
     const name = (id) => s.players.find((p) => p.id === id)?.name ?? 'Someone';
@@ -284,6 +286,330 @@ export default {
     }
   },
 };
+
+// ---- How to play ----------------------------------------------------------------------
+// One little animation per rules step, drawn by the TV's rules overlay (public/tv/rules.js).
+// Everything is a function of t (seconds into the step), so stepping back replays it exactly.
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const seg = (t, a, b) => clamp01((t - a) / (b - a));
+const ease = (k) => 1 - Math.pow(1 - k, 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const BUDDIES = ['#ff6fd8', '#3ddc84', '#38b6ff', '#ffd23f'];
+
+function drawRules(ctx, art, t, box, now) {
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  ctx.save();
+  ({ goal: artGoal, turn: artTurn, bucket: artBucket, wires: artWires, dodge: artDodge, peek: artPeek, phone: artPhone }[art] ?? (() => {}))(ctx, t, cx, cy, now);
+  ctx.restore();
+}
+
+// Bombs drop on three bomb-buddies one by one; the last one left wins.
+function artGoal(ctx, t, cx, cy, now) {
+  cardBack(ctx, cx, cy - 120, 0.5);
+  const blasts = [[0, 0.8], [3, 2.0], [2, 3.2]]; // [buddy, time it blows]
+  BUDDIES.forEach((color, i) => {
+    const x = cx + (i - 1.5) * 230;
+    const y = cy + 110;
+    const b = blasts.find(([j]) => j === i);
+    const fall = b ? seg(t, b[1] - 0.6, b[1]) : 0;
+    if (fall > 0 && fall < 1) bombIcon(ctx, lerp(cx, x, fall), lerp(cy - 90, y - 40, ease(fall)), 0.4, now, true);
+    const gone = b && t >= b[1];
+    const won = !b && t > 4.2;
+    buddy(ctx, x, y - (won ? Math.abs(Math.sin((t - 4.2) * 5)) * 24 : 0), color, now, { dead: gone, crown: won });
+    if (gone) blast(ctx, x, y, seg(t, b[1], b[1] + 0.8));
+  });
+  if (t > 4.4) text(ctx, 'WINNER', cx - 0.5 * 230, cy + 225, { size: 30, weight: 900, color: '#ffd23f' });
+}
+
+// Play two cards onto the pile, then draw one from the crate.
+function artTurn(ctx, t, cx, cy, now) {
+  const hand = { x: cx - 380, y: cy + 20 };
+  const pileAt = { x: cx, y: cy };
+  const crateAt = { x: cx + 380, y: cy };
+  roundRect(ctx, pileAt.x - 60, pileAt.y - 84, 120, 168, 12);
+  ctx.strokeStyle = 'rgba(255,232,194,.2)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([10, 8]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  for (let i = 3; i >= 0; i--) cardBack(ctx, crateAt.x + i * 3, crateAt.y - i * 3, 0.75);
+  const kinds = ['scope', 'duck', 'stir'];
+  const plays = { scope: 0.6, stir: 1.8 };
+  kinds.forEach((kind, i) => {
+    const home = { x: hand.x + (i - 1) * 80, y: hand.y + Math.abs(i - 1) * 10, r: (i - 1) * 0.18 };
+    const k = plays[kind] == null ? 0 : ease(seg(t, plays[kind], plays[kind] + 0.7));
+    ctx.save();
+    ctx.translate(lerp(home.x, pileAt.x, k), lerp(home.y, pileAt.y, k) - Math.sin(k * Math.PI) * 90);
+    ctx.rotate(lerp(home.r, 0, k));
+    cardFace(ctx, kind, 0, 0, 0.72, now);
+    ctx.restore();
+  });
+  const d = ease(seg(t, 3.4, 4.3));
+  if (t > 3.4) {
+    ctx.save();
+    ctx.translate(lerp(crateAt.x, hand.x + 40, d), lerp(crateAt.y, hand.y - 20, d) - Math.sin(d * Math.PI) * 100);
+    ctx.rotate(-0.3 * d);
+    cardBack(ctx, 0, 0, 0.75);
+    ctx.restore();
+  }
+  ruleLabel(ctx, 'Your hand', hand.x, cy + 170, 1);
+  ruleLabel(ctx, '1. Play any cards', pileAt.x, cy + 170, seg(t, 0.3, 0.8));
+  ruleLabel(ctx, '2. Draw one. Turn over.', crateAt.x, cy + 170, seg(t, 3.0, 3.5));
+}
+
+// A Bomb comes out of the crate, a Bucket douses it, and it goes back in somewhere.
+function artBucket(ctx, t, cx, cy, now) {
+  const crateAt = { x: cx - 380, y: cy };
+  for (let i = 3; i >= 0; i--) cardBack(ctx, crateAt.x + i * 3, crateAt.y - i * 3, 0.75);
+  const out = ease(seg(t, 0, 0.7));
+  const back = ease(seg(t, 4.2, 5.2));
+  const flip = seg(t, 0.7, 1.1);
+  const flipBack = seg(t, 3.8, 4.2);
+  const wet = t > 3.2;
+  const shake = t > 1.1 && t < 3.2 ? Math.sin(now / 30) * 4 : 0;
+  const x = t < 4.2 ? lerp(crateAt.x, cx, out) : lerp(cx, crateAt.x, back);
+  const y = (t < 4.2 ? -Math.sin(out * Math.PI) * 80 : -Math.sin(back * Math.PI) * 80) + cy;
+  if (back < 1) {
+    ctx.save();
+    ctx.translate(x + shake, y);
+    const sx = t < 3.8 ? Math.abs(Math.cos(flip * Math.PI)) : Math.abs(Math.cos(flipBack * Math.PI));
+    ctx.scale(Math.max(0.02, sx), 1);
+    const faceUp = t < 3.8 ? flip >= 0.5 : flipBack < 0.5;
+    if (faceUp) cardFace(ctx, 'bomb', 0, 0, 0.9, now, wet);
+    else cardBack(ctx, 0, 0, 0.9);
+    ctx.restore();
+  }
+  // The Bucket swings in from your hand and pours.
+  const swing = ease(seg(t, 1.9, 2.6));
+  const leave = seg(t, 3.6, 4.0);
+  if (t > 1.9 && leave < 1) {
+    ctx.save();
+    ctx.globalAlpha = 1 - leave;
+    ctx.translate(lerp(cx + 420, cx + 110, swing), lerp(cy + 40, cy - 150, swing));
+    ctx.rotate(-0.9 * swing);
+    cardFace(ctx, 'bucket', 0, 0, 0.6, now);
+    ctx.restore();
+    if (t > 2.6) {
+      for (let i = 0; i < 9; i++) {
+        const k = ((t - 2.6) * 1.6 + i / 9) % 1;
+        circle(ctx, cx + 40 - (i % 3) * 30 + Math.sin(i) * 8, cy - 140 + k * 180, 6, `rgba(56,182,255,${(1 - leave) * (1 - k)})`);
+      }
+    }
+  }
+  ruleLabel(ctx, t < 3.2 ? 'BOMB!' : t < 4.2 ? 'Doused' : 'Hidden back in the crate', t < 4.2 ? cx : crateAt.x, cy + 170, seg(t, 0.9, 1.2), t < 3.2 ? '#ff6b5e' : '#8fd3ff');
+}
+
+// Scissors hover over the wires and snip one.
+function artWires(ctx, t, cx, cy, now) {
+  const by = cy - 90;
+  const cut = t > 3.4 ? 'blue' : null;
+  wires(ctx, cx, by, cut, now);
+  bombIcon(ctx, cx, by, 1.2, now, !cut, false);
+  const stops = [0, 1, 2, 1];
+  const hover = Math.min(3, Math.floor(seg(t, 0.4, 3.4) * 4));
+  const i = cut ? 1 : stops[hover];
+  const sx = cx + (i - 1) * 36;
+  const ex = cx - 330 + i * 330;
+  const wx = (sx + ex) / 2;
+  const wy = by + 120 - (cut ? 0 : Math.abs(Math.sin(now / 200)) * 8);
+  if (t < 3.9) scissors(ctx, wx + 46, wy - 10, cut ? 0.05 : 0.5);
+  if (cut) {
+    text(ctx, 'DEFUSED', cx, by - 110, { size: 40, weight: 900, color: '#3ddc84' });
+    ['red', 'blue', 'yellow'].forEach((id, j) => {
+      const reveal = seg(t, 4.2 + j * 0.3, 4.5 + j * 0.3);
+      ctx.globalAlpha = reveal;
+      text(ctx, id === 'blue' ? 'SAFE' : 'BOOM', cx - 330 + j * 330, by + 218, { size: 30, weight: 900, color: id === 'blue' ? '#3ddc84' : '#ff6b5e' });
+      ctx.globalAlpha = 1;
+    });
+  }
+}
+
+// Three ways out of drawing.
+function artDodge(ctx, t, cx, cy, now) {
+  [['duck', 'No draw'], ['potato', 'No draw. Next player draws 2'], ['boomerang', 'Hot Potato? Send it back']].forEach(([kind, label], i) => {
+    const k = ease(seg(t, 0.3 + i * 1.3, 0.9 + i * 1.3));
+    if (k <= 0) return;
+    const x = cx + (i - 1) * 360;
+    ctx.globalAlpha = k;
+    cardFace(ctx, kind, x, cy - 20 - (1 - k) * 60, 0.95, now);
+    ctx.font = '700 24px system-ui, -apple-system, sans-serif';
+    wrapText(ctx, label, 300).forEach((line, j) => text(ctx, line, x, cy + 150 + j * 30, { size: 24, weight: 700, color: '#ffe8c2' }));
+    ctx.globalAlpha = 1;
+  });
+}
+
+// A Periscope shows the top three; the "Bomb" among them turns out to be a Decoy.
+function artPeek(ctx, t, cx, cy, now) {
+  cardFace(ctx, 'scope', cx - 440, cy - 10, 0.8, now);
+  ruleLabel(ctx, 'Peek at the top 3', cx - 440, cy + 150, 1);
+  const crateAt = { x: cx - 160, y: cy - 10 };
+  for (let i = 3; i >= 0; i--) cardBack(ctx, crateAt.x + i * 3, crateAt.y - i * 3, 0.7);
+  ['duck', 'bomb', 'swipe'].forEach((kind, i) => {
+    const k = ease(seg(t, 0.6 + i * 0.25, 1.3 + i * 0.25));
+    const x = lerp(crateAt.x, cx + 110 + i * 170, k);
+    const sx = Math.abs(Math.cos(seg(t, 1.3 + i * 0.25, 1.7 + i * 0.25) * Math.PI));
+    const up = t > 1.5 + i * 0.25;
+    const decoy = kind === 'bomb' && t > 3.4;
+    const pop = decoy ? seg(t, 3.4, 3.8) : 0;
+    ctx.save();
+    ctx.translate(x, cy - 10 - Math.sin(k * Math.PI) * 50 - Math.sin(pop * Math.PI) * 20);
+    ctx.scale(Math.max(0.02, up ? Math.max(sx, t > 1.7 + i * 0.25 ? 1 : 0) : sx), 1);
+    if (up) cardFace(ctx, decoy ? 'decoy' : kind, 0, 0, 0.7, now);
+    else cardBack(ctx, 0, 0, 0.7);
+    ctx.restore();
+  });
+  ruleLabel(ctx, t > 3.4 ? 'A Decoy! Just goes pop' : 'A Bomb? Or a Decoy?', cx + 280, cy + 150, seg(t, 2.0, 2.4), t > 3.4 ? '#ff6fd8' : '#ff6b5e');
+}
+
+// A phone with your hand; a tap picks a card. The TV's card list sits on the left.
+function artPhone(ctx, t, cx, cy, now) {
+  const px = cx + 170;
+  const w = 260;
+  const h = 430;
+  roundRect(ctx, px - w / 2, cy - h / 2, w, h, 34);
+  ctx.fillStyle = '#0d0f14';
+  ctx.fill();
+  ctx.strokeStyle = '#4a4450';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+  text(ctx, 'Your hand', px, cy - 150, { size: 20, weight: 800, color: '#ffe8c2' });
+  const kinds = ['bucket', 'duck', 'potato', 'scope'];
+  const picked = t > 1.4;
+  kinds.forEach((kind, i) => {
+    const x = px - 75 + (i % 2) * 150 - 0;
+    const lift = picked && i === 1 ? -12 : 0;
+    cardFace(ctx, kind, px + (i % 2 ? 50 : -50), cy - 60 + Math.floor(i / 2) * 120 + lift, 0.46, now);
+    void x;
+  });
+  if (picked) {
+    roundRect(ctx, px - 100, cy + 150, 200, 44, 12);
+    ctx.fillStyle = '#3ddc84';
+    ctx.fill();
+    text(ctx, 'Play Duck', px, cy + 180, { size: 20, weight: 900, color: '#0d0f14' });
+  }
+  // A fingertip taps the Duck card.
+  const tap = seg(t, 0.8, 1.4);
+  if (t > 0.4) {
+    const fx = px + 50;
+    const fy = cy - 60;
+    const r = 26 - 6 * Math.sin(tap * Math.PI);
+    circle(ctx, fx + 30, fy + 50, r, 'rgba(255,232,194,.55)');
+    if (tap > 0.4 && tap < 1) {
+      ctx.strokeStyle = `rgba(255,232,194,${1 - tap})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(fx + 30, fy + 50, 30 + 40 * tap, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  // A mini card list, like the one on the left of the board.
+  const lx = cx - 480;
+  const show = seg(t, 2.2, 2.8);
+  ctx.globalAlpha = show;
+  text(ctx, 'ON THE TV', lx, cy - 120, { size: 18, weight: 900, align: 'left', color: '#8a7a6a' });
+  ['bomb', 'bucket', 'duck', 'potato', 'scope', 'swipe'].forEach((k, i) => {
+    const y = cy - 100 + i * 38;
+    ctx.fillStyle = CARD[k].color;
+    roundRect(ctx, lx, y + 6, 14, 20, 3);
+    ctx.fill();
+    text(ctx, CARD[k].name, lx + 26, y + 24, { size: 22, weight: 800, align: 'left', color: CARD[k].color });
+  });
+  ctx.globalAlpha = 1;
+}
+
+function ruleLabel(ctx, str, x, y, alpha, color = '#ffe8c2') {
+  if (alpha <= 0) return;
+  ctx.globalAlpha = alpha;
+  text(ctx, str, x, y, { size: 28, weight: 800, color });
+  ctx.globalAlpha = 1;
+}
+
+function buddy(ctx, x, y, color, now, { dead = false, crown = false } = {}) {
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + 52, 50, 12, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (dead) {
+    circle(ctx, x, y + 10, 40, '#2a2528');
+    ctx.strokeStyle = '#6b6370';
+    ctx.lineWidth = 5;
+    for (const ex of [-14, 14]) {
+      ctx.beginPath();
+      ctx.moveTo(x + ex - 7, y);
+      ctx.lineTo(x + ex + 7, y + 14);
+      ctx.moveTo(x + ex + 7, y);
+      ctx.lineTo(x + ex - 7, y + 14);
+      ctx.stroke();
+    }
+    return;
+  }
+  ctx.strokeStyle = '#c98d55';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(x + 14, y - 44);
+  ctx.quadraticCurveTo(x + 30, y - 70, x + 20, y - 78);
+  ctx.stroke();
+  circle(ctx, x, y, 48, color);
+  circle(ctx, x - 16, y - 16, 11, 'rgba(255,255,255,.35)');
+  for (const ex of [-15, 15]) {
+    circle(ctx, x + ex, y - 5, 11, '#fff');
+    circle(ctx, x + ex, y - 7, 5, '#1a0f12');
+  }
+  if (crown) {
+    ctx.fillStyle = '#ffd23f';
+    ctx.beginPath();
+    ctx.moveTo(x - 30, y - 50);
+    ctx.lineTo(x - 30, y - 82);
+    ctx.lineTo(x - 15, y - 64);
+    ctx.lineTo(x, y - 90);
+    ctx.lineTo(x + 15, y - 64);
+    ctx.lineTo(x + 30, y - 82);
+    ctx.lineTo(x + 30, y - 50);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/** An explosion at k = 0..1: a flash, a ring and flying sparks. */
+function blast(ctx, x, y, k) {
+  if (k <= 0 || k >= 1) return;
+  const a = 1 - k;
+  circle(ctx, x, y, 30 + 90 * k, `rgba(255,240,200,${Math.max(0, 1 - k * 3)})`);
+  ctx.strokeStyle = `rgba(255,140,60,${a})`;
+  ctx.lineWidth = 10 * a;
+  ctx.beginPath();
+  ctx.arc(x, y, 40 + 140 * k, 0, Math.PI * 2);
+  ctx.stroke();
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2 + i;
+    const r = 40 + 170 * ease(k) * (0.7 + 0.3 * Math.sin(i * 7));
+    circle(ctx, x + Math.cos(ang) * r, y + Math.sin(ang) * r, 7 * a, i % 2 ? '#ffd23f' : '#ff4d3d');
+  }
+}
+
+function scissors(ctx, x, y, open) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.6);
+  ctx.strokeStyle = '#e8e2ea';
+  ctx.lineWidth = 7;
+  ctx.lineCap = 'round';
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-60, s * 60 * open * 0.5);
+    ctx.stroke();
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(26, s * 16, 14, 0, Math.PI * 2);
+    ctx.strokeStyle = '#ff9f1c';
+    ctx.stroke();
+    ctx.strokeStyle = '#e8e2ea';
+    ctx.lineWidth = 7;
+  }
+  ctx.restore();
+}
 
 // ---- Pieces -------------------------------------------------------------------------
 function background(ctx, W, H, risk, now, dt) {
@@ -674,7 +1000,7 @@ function bombIcon(ctx, x, y, scale, now, lit, wet = false) {
 }
 
 // Card faces: a dark card with a colored band, the name, and a vector icon.
-function cardFace(ctx, kind, x, y, scale, now) {
+function cardFace(ctx, kind, x, y, scale, now, wet = false) {
   const c = CARD[kind] ?? CARD.bomb;
   const w = 150 * scale;
   const h = 214 * scale;
@@ -695,14 +1021,14 @@ function cardFace(ctx, kind, x, y, scale, now) {
   // Halftone dots behind the icon.
   for (let gx = -66; gx < 70; gx += 14) for (let gy = -98; gy < 60; gy += 14) circle(ctx, gx + (Math.round(gy / 14) & 1) * 7, gy, 3, c.color + "22");
   ctx.restore();
-  icon(ctx, kind, 0, -18, now);
+  icon(ctx, kind, 0, -18, now, wet);
   text(ctx, c.name.toUpperCase(), 0, 93, { size: c.name.length > 8 ? 17 : 21, weight: 900, color: '#1a0f12' });
   ctx.restore();
   void w;
   void h;
 }
 
-function icon(ctx, kind, x, y, now) {
+function icon(ctx, kind, x, y, now, wet = false) {
   ctx.save();
   ctx.translate(x, y);
   ctx.lineCap = 'round';
@@ -712,7 +1038,7 @@ function icon(ctx, kind, x, y, now) {
     case 'bomb':
     case 'decoy':
       ctx.restore();
-      bombIcon(ctx, x + 0, y + 12, 0.85, now, kind === 'bomb');
+      bombIcon(ctx, x + 0, y + 12, 0.85, now, kind === 'bomb' && !wet, wet);
       if (kind === 'decoy') {
         ctx.fillStyle = '#ff6fd8';
         ctx.fillRect(x + 10, y - 60, 46, 26);

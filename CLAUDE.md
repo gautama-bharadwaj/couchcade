@@ -13,7 +13,7 @@ Living-room party game platform. A browser on whatever computer is connected to 
 
 ## Adding a game
 
-Read the contract at the top of `server/games/index.js`, then add `server/games/<id>.js` and `public/tv/games/<id>.js` and register both. The phone layout comes from the game's `controller.buttons`: a joystick plus up to two buttons with ids `a` and `b`.
+Read the contract at the top of `server/games/index.js`, then add `server/games/<id>.js` and `public/tv/games/<id>.js` and register both. The phone layout comes from the game's `controller.buttons`: a joystick plus up to two buttons with ids `a` and `b`. Turn-based and card games should also list `rules`, a short how-to-play intro the TV plays at the start (contract in `server/games/index.js`, overlay in `public/tv/rules.js`); new players can't learn a game from card text alone.
 
 ## Running and testing
 
