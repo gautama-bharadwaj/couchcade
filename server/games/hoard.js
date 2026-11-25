@@ -39,7 +39,7 @@ const keeperTimes = new Map();
 export default {
   id: 'hoard',
   title: 'Dragon Hoard',
-  category: 'party',
+  tab: 'board',
   icon: '🐉',
   description: 'Two teams, 25 words, one sleeping dragon. Clue your team to its gems in one word.',
   minPlayers: 2,
