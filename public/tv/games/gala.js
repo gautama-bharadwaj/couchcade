@@ -799,11 +799,11 @@ function verdict(ctx, s, since, T) {
   const byId = new Map(s.players.map((p) => [p.id, p]));
   // Votes: voter → target, revealed together.
   const rows = s.votes ?? [];
-  serif(ctx, 'How everyone voted', 420, 262, 28, GOLD);
+  serif(ctx, 'How everyone voted', 400, 262, 28, GOLD);
   rows.forEach((v, i) => {
     const col = rows.length > 6 ? i % 2 : 0;
     const row = rows.length > 6 ? Math.floor(i / 2) : i;
-    const x = 150 + col * 330;
+    const x = 110 + col * 410;
     const y = 304 + row * 64;
     const q = clamp01((since - i * 120) / 300);
     ctx.globalAlpha = q;
@@ -811,11 +811,11 @@ function verdict(ctx, s, since, T) {
     const t = v.target === 'nobody' ? null : byId.get(v.target);
     drawGuest(ctx, x, y, 48, a?.color ?? '#888', seedOf(v.voter));
     text(ctx, a?.name ?? '?', x + 32, y + 8, { size: 22, weight: 800, align: 'left' });
-    drawEnvelope(ctx, x + 150, y, 30);
+    drawEnvelope(ctx, x + 200, y, 30);
     if (t) {
-      drawGuest(ctx, x + 200, y, 48, t.color, seedOf(t.id));
-      text(ctx, t.name, x + 232, y + 8, { size: 22, weight: 800, align: 'left' });
-    } else text(ctx, 'Nobody', x + 180, y + 8, { size: 22, weight: 800, align: 'left', color: '#8a93a8' });
+      drawGuest(ctx, x + 250, y, 48, t.color, seedOf(t.id));
+      text(ctx, t.name, x + 282, y + 8, { size: 22, weight: 800, align: 'left' });
+    } else text(ctx, 'Nobody', x + 232, y + 8, { size: 22, weight: 800, align: 'left', color: '#8a93a8' });
     ctx.globalAlpha = 1;
   });
 

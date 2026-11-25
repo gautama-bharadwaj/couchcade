@@ -45,6 +45,15 @@ export default {
   minPlayers: 2,
   maxPlayers: 10,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip).
+  rules: [
+    { title: 'What hides under the words', art: 'board', text: 'Every word on the board hides an Ember gem, a Frost gem, a pile of dust, or the sleeping dragon.' },
+    { title: 'The Keeper gives clues', art: 'keeper', text: 'Each team has a Keeper who sees the hidden key on their phone. On your turn, your Keeper types one word and a number, like "ocean 3".' },
+    { title: 'Vote on your phones', art: 'vote', text: 'The rest of the team talks it over and taps a word to vote. It turns over when most of you agree.' },
+    { title: 'Gems, dust and turns', art: 'turn', text: 'Your own gem: keep guessing, up to the number plus one. Dust or the other team’s gem ends your turn. Find all your gems first to win.' },
+    { title: 'Never wake the dragon', art: 'dragon', text: 'Turn over the dragon and your team loses on the spot. Keepers, steer them well clear of it!' },
+    { title: 'Two or three players', art: 'coop', text: 'With fewer than four, you are all one team against the dragon: find every gem before the clues run out.' },
+  ],
 
   create({ players }) {
     const ids = [...players.values()].filter((p) => p.connected).map((p) => p.id);
@@ -306,9 +315,10 @@ export default {
             id: String(x.i),
             label: x.word.toUpperCase(),
             color: show ? ownerColor(x.owner) : PARCHMENT,
-            ink: show && (x.owner === 'dragon') ? '#ff8f8f' : INK,
-            dim: x.revealed,
-            mark: x.revealed ? (x.owner === 'dragon' ? 'DRAGON' : x.owner === 'dust' ? 'dust' : '✓ gem') : x.owner === 'dragon' && show ? 'DRAGON' : undefined,
+            ink: x.revealed ? (x.owner === 'dust' ? '#c8bca2' : '#fff6e0') : show && x.owner === 'dragon' ? '#ffd2d2' : INK,
+            art: x.revealed ? x.owner : show ? `key:${x.owner}` : 'hidden',
+            dim: false,
+            mark: x.revealed ? (x.owner === 'dragon' ? 'DRAGON' : x.owner === 'dust' ? 'dust' : '✓ gem') : x.owner === 'dragon' && show ? 'DRAGON' : undefined, // shown only without art
             dots: voted.map(colorOf),
             ring: mine === x.i ? '#ffffff' : undefined,
             disabled: x.revealed,
@@ -320,7 +330,7 @@ export default {
     const clueCard = () => {
       if (!st.clue) return [];
       const t = team(st.clue.team);
-      return [{ label: `${st.clue.word.toUpperCase()} · ${st.clue.n}`, sub: `${t ? (coop ? 'The' : t.name) : ''} Keeper's clue · ${st.guessesLeft} guess${st.guessesLeft === 1 ? '' : 'es'} left`, color: t?.color }];
+      return [{ art: t ? `crest:${t.key}` : undefined, label: `${st.clue.word.toUpperCase()} · ${st.clue.n}`, sub: `${t ? (coop ? 'The' : t.name) : ''} Keeper's clue · ${st.guessesLeft} guess${st.guessesLeft === 1 ? '' : 'es'} left`, color: t?.color }];
     };
 
     function screenFor(id) {
@@ -359,7 +369,7 @@ export default {
           title: 'Dragon Hoard',
           tag,
           lines,
-          cards: coop ? [] : teams.map((x) => ({ label: `${x.name}: ${x.members.map(name).join(', ')}`, sub: `Keeper ${name(x.keeper)} · ${x.total} gems${x === teams[0] ? ' · goes first' : ''}`, color: x.color })),
+          cards: coop ? [] : teams.map((x) => ({ art: `crest:${x.key}`, label: `${x.name}: ${x.members.map(name).join(', ')}`, sub: `Keeper ${name(x.keeper)} · ${x.total} gems${x === teams[0] ? ' · goes first' : ''}`, color: x.color })),
           ...(keeper ? { grid: grid({ key: true }) } : {}),
           actions: st.ready.has(id) ? [] : [{ key: 'ready', label: 'Got it' }],
           footer: `${humansNotReady()} still reading · ${timer}`,
@@ -494,7 +504,7 @@ export default {
       },
 
       playerView(id) {
-        return { screen: screenFor(id) };
+        return { screen: { ...screenFor(id), art: 'hoard' } };
       },
 
       isOver: () => st.over,

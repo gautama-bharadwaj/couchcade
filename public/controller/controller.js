@@ -595,13 +595,14 @@ function buildHero(h, el, art) {
   box.style.height = `${ht}px`;
   const front = artCanvas(w, ht, (g) => art.drawHero(g, h.art, w / 2, ht / 2, w - 6, ht - 6), 'art face');
   box.append(front);
-  if (h.flip && art.drawHeroBack && !heroesSeen.has(h.art)) {
+  const seenKey = h.key ?? h.art;
+  if (h.flip && art.drawHeroBack && !heroesSeen.has(seenKey)) {
     const back = artCanvas(w, ht, (g) => art.drawHeroBack(g, w / 2, ht / 2, w - 6, ht - 6), 'art back');
     box.append(back);
     box.classList.add('flipping');
     navigator.vibrate?.([30, 60, 30]);
   }
-  heroesSeen.add(h.art);
+  heroesSeen.add(seenKey);
   return box;
 }
 

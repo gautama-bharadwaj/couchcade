@@ -392,7 +392,7 @@ export default {
 
       if (st.phase === 'verdict') {
         const v = st.verdict;
-        return { title: v.nobody ? 'Nobody leaves' : `${name(v.id)} is out`, tag, lines: [v.nobody ? v.reason : `${name(v.id)} was ${['thief', 'guest'].includes(v.role) ? 'a' : 'the'} ${ROLES[v.role].label}.`] };
+        return { title: v.nobody ? 'Nobody leaves' : `${name(v.id)} is out`, tag, ...(v.nobody ? {} : { hero: { art: `role:${v.role}`, small: true, flip: true, key: `out:${v.id}` } }), lines: [v.nobody ? v.reason : `${name(v.id)} was ${['thief', 'guest'].includes(v.role) ? 'a' : 'the'} ${ROLES[v.role].label}.`] };
       }
 
       return { title: '…', tag };

@@ -713,8 +713,11 @@ export function drawTile(g, kind, x, y, w, h, o = {}) {
     drawCoins(g, -w * 0.3, h / 2 + 2, w * 0.42, seed, t);
     drawCoins(g, w * 0.32, h / 2 + 4, w * 0.36, seed + 5, t);
     g.restore();
-    const gs = Math.min(h * 0.58, w * 0.4) * (1 + 0.04 * Math.sin(t * 3 + seed));
-    drawGem(g, 0, -h * 0.12, gs, kind, 0.5 + 0.5 * Math.sin(t * 2 + seed));
+    if (o.compact) drawGem(g, w / 2 - h * 0.22, -h / 2 + h * 0.22, h * 0.3, kind, 0.6);
+    else {
+      const gs = Math.min(h * 0.58, w * 0.4) * (1 + 0.04 * Math.sin(t * 3 + seed));
+      drawGem(g, 0, -h * 0.12, gs, kind, 0.5 + 0.5 * Math.sin(t * 2 + seed));
+    }
     g.strokeStyle = rgba('#fff3d0', 0.6);
     g.lineWidth = Math.max(1, h * 0.03);
     g.beginPath();
@@ -731,7 +734,8 @@ export function drawTile(g, kind, x, y, w, h, o = {}) {
     cobweb(g, -w / 2, -h / 2, h * 0.55, 1);
     cobweb(g, w / 2, -h / 2, h * 0.4, -1);
     g.restore();
-    drawDust(g, -w * 0.3, h * 0.05, Math.min(h * 0.6, w * 0.32), seed);
+    if (o.compact) drawDust(g, w / 2 - h * 0.24, -h / 2 + h * 0.26, h * 0.36, seed);
+    else drawDust(g, -w * 0.3, h * 0.05, Math.min(h * 0.6, w * 0.32), seed);
   } else if (kind === 'dragon') {
     const fg = g.createLinearGradient(0, -h / 2, 0, h / 2);
     fg.addColorStop(0, '#6a0c16');
@@ -748,7 +752,8 @@ export function drawTile(g, kind, x, y, w, h, o = {}) {
       g.fill();
     }
     g.restore();
-    drawDragonHead(g, -w * 0.08, -h * 0.04, Math.min(h * 0.95, w * 0.55), 1, t);
+    if (o.compact) drawDragonHead(g, w / 2 - h * 0.32, -h / 2 + h * 0.24, h * 0.42, 1, t);
+    else drawDragonHead(g, -w * 0.08, -h * 0.04, Math.min(h * 0.95, w * 0.55), 1, t);
     g.strokeStyle = '#ff5a3a';
     g.lineWidth = Math.max(1, h * 0.03);
     g.beginPath();
@@ -926,5 +931,5 @@ export function drawCell(g, art, w, h, cell) {
   // Words sit in the middle on the phone, so turned-over tiles keep their picture small.
   if (a === 'key') drawTile(g, 'hidden', w / 2, h / 2, w - 2, h - 4, { key: b, seed });
   else if (a === 'hidden') drawTile(g, 'hidden', w / 2, h / 2, w - 2, h - 4, { seed });
-  else drawTile(g, a, w / 2, h / 2, w - 2, h - 4, { seed });
+  else drawTile(g, a, w / 2, h / 2, w - 2, h - 4, { seed, compact: true });
 }

@@ -32,9 +32,10 @@
 //     title: 'Night 2',                    // big heading
 //     tag: { label: 'Thief', color },      // badge, e.g. a secret role
 //     swatch: { color, label? },           // a big block of one color (a secret color, say)
-//     hero: { art, flip?, small? },        // a big illustrated card drawn by the art module's drawHero
+//     hero: { art, flip?, small?, key? }, // a big illustrated card drawn by the art module's drawHero
 //                                          //   (a secret role, say); flip = turn over from drawHeroBack
-//                                          //   the first time it shows. Needs `art` on the screen.
+//                                          //   the first time it shows (per key, default art).
+//                                          //   Needs `art` on the screen.
 //     lines: ['You are in the Library.'],  // paragraphs
 //     cards: [{ label, sub?, color? }],    // read-only info tiles (clues, who you saw…)
 //     choose: {                            // pick one option; sends { key, value: option.id }
