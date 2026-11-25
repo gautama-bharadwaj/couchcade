@@ -259,7 +259,9 @@ npm version minor        # bumps package.json and tags v0.2.0
 git push origin main --follow-tags
 ```
 
-The same workflow then publishes that version to npm (`npx couchcade`), using the repository secret `NPM_TOKEN` (an npm access token that can publish `couchcade`). Without the secret it skips npm with a warning. The tag must match the version in `package.json`, which `npm version` takes care of.
+The same workflow then publishes that version to npm (`npx couchcade`) by [trusted publishing](https://docs.npmjs.com/trusted-publishers): npm recognises this repository's release workflow, so there's no npm token to keep. The tag must match the version in `package.json`, which `npm version` takes care of.
+
+The very first version had to be published by hand, because npm only lets you set up trusted publishing for a package that exists. For a new package that is: `npm login`, then `npm publish --access public` from a clean checkout of the tag; then on npmjs.com, the package's **Settings > Trusted publishing**, choose GitHub Actions and enter `gautama-bharadwaj` / `couchcade` / `release.yml`. Until that's done, the npm step skips with a warning instead of failing the release.
 
 To build only for the machine you're on: `npm run build:release` (needs Node 25.5 or newer), which writes `dist/release/`. It bundles the server with esbuild and packs it, Node itself and `public/` into one [single executable application](https://nodejs.org/api/single-executable-applications.html). This is the only build step in the project; development never needs it. `npm run check` runs the smoke test against the source, and `node scripts/smoke.mjs --cmd <binary>` against a build.
 

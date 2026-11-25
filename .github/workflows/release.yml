@@ -1,5 +1,5 @@
 # Builds the downloadable apps and attaches them to a GitHub Release, then publishes the same
-# version to npm (for `npx couchcade`).
+# version to npm (for `npx couchcade`; see the npm job for its one-time setup).
 #
 #   git tag v0.2.0 && git push origin v0.2.0    build all platforms, publish the release and npm
 #   Actions > Release > Run workflow            build only; download the files from the run
@@ -107,9 +107,12 @@ jobs:
           fi
           gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
 
-  # npm, for `npx couchcade`. Needs a repository secret NPM_TOKEN: an npm granular access token
-  # with read and write access to the couchcade package (Settings > Secrets and variables > Actions).
-  # Without it this job skips with a warning, so a release never fails over npm.
+  # npm, for `npx couchcade`, by trusted publishing: npm checks this workflow's GitHub identity
+  # (OIDC), so there's no npm token to store or renew, and every version gets provenance.
+  # One-time setup on npmjs.com, after the first version exists there: the couchcade package >
+  # Settings > Trusted publishing > GitHub Actions, repository gautama-bharadwaj/couchcade,
+  # workflow release.yml. Until then (or if that version is already published) this job skips
+  # with a note, so a release never fails over npm.
   npm:
     name: Publish to npm
     if: startsWith(github.ref, 'refs/tags/v')
@@ -117,22 +120,20 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm provenance: links the package to this repository and workflow run
+      id-token: write # lets npm verify this run (trusted publishing)
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: ${{ env.NODE_VERSION }} # trusted publishing needs npm 11.5.1+, which Node 26 has
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
       - run: npm run check
       - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::warning::No NPM_TOKEN secret, so not publishing to npm."
+          if ! npm view couchcade name > /dev/null 2>&1; then
+            echo "::warning::couchcade isn't on npm yet. Publish the first version by hand, then set up trusted publishing (see the README, Releases)."
             exit 0
           fi
           v="$(node -p "require('./package.json').version")"
