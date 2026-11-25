@@ -125,6 +125,18 @@
     #screen .wheel canvas { touch-action: none; }
     #screen .nudges { display: grid; grid-template-columns: 1fr 1.6fr 1.6fr 1fr; gap: 6px; width: 100%; max-width: 380px; }
     #screen .nudges button { padding: 10px 6px; font-size: 1rem; }
+    #screen .tally { display: grid; gap: 6px; }
+    #screen .tally .tt { font-weight: 800; color: var(--muted); font-size: .9rem; }
+    #screen .trow { display: grid; grid-template-columns: repeat(auto-fit, minmax(54px, 1fr)); gap: 6px; }
+    #screen .tcell { display: flex; flex-direction: column; border-radius: 12px; background: var(--panel); border: 2px solid var(--c, var(--line)); overflow: hidden; }
+    #screen .tcell.zero .tface { opacity: .45; }
+    #screen .tface { display: flex; flex-direction: column; align-items: center; padding: 6px 2px; line-height: 1.05; }
+    #screen .tface .ti { font-size: 1.5rem; }
+    #screen .tface b { font-size: 1.3rem; }
+    #screen .tface small { font-size: .62rem; color: var(--muted); font-weight: 700; }
+    #screen .tbtn { border: 0; background: #232a3b; color: inherit; font-size: 1.3rem; font-weight: 900; padding: 6px 0; }
+    #screen .hexmap { display: flex; justify-content: center; }
+    #screen .hexmap canvas { touch-action: manipulation; border-radius: 14px; }
     #screen .dial { display: flex; flex-direction: column; align-items: center; gap: 6px; }
     #screen .dial canvas { touch-action: none; }
     #screen .dialLabels { display: flex; justify-content: space-between; gap: 12px; width: 100%; max-width: 420px; font-weight: 700; font-size: .95rem; }

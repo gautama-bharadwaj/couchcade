@@ -51,6 +51,18 @@
 //       pins?: [{ cell, color }],          // other players' markers
 //       locked?: true, small?: true,       // locked = view only; small = a little reference copy
 //     },                                   // (drawn after input, before actions; arrow keys nudge the pick)
+//     tally: {                             // counters with − / + buttons; sends { key, value: 'group:row:+' } (or '-')
+//       key: 'offer', locked?: true,       // locked = just show the numbers (a hand of resources, say)
+//       groups: [{ id: 'give', title?, rows: [{ id: 'wood', label: '🪵', sub?, color?, value, max? }] }],
+//     },
+//     hexmap: {                            // a hex board; tap a glowing spot, sends { key, value: spot.id }
+//       key: 'spot',                       // pointy-top hexes of radius 1, in map units (any origin)
+//       tiles: [{ x, y, color, label?, num?, hot?, dim? }],   // num = a number token, hot = red number
+//       roads: [{ x1, y1, x2, y2, color }], buildings: [{ x, y, color, kind: 'hut' | 'tower' }],
+//       harbors?: [{ x, y, label }],
+//       spots: [{ id, x, y, x1?, y1?, x2?, y2?, tile? }],     // a corner; an edge (with ends); or a whole tile
+//       selected?, locked?,
+//     },                                   // (tally is drawn right after lines; hexmap after input)
 //     dial: {                              // a 0–100 band between two ideas; sends { key, value: String(0–100) }
 //       key: 'dial', left: 'Bland', right: 'Spicy',
 //       value?,                            // your own needle (null = not set yet)
@@ -90,10 +102,11 @@ import pillowfort from './pillowfort.js';
 import tint from './tint.js';
 import hoard from './hoard.js';
 import tunein from './tunein.js';
+import tidewake from './tidewake.js';
 import sandbox from './sandbox.js';
 
 // Order within each tab is the order here. The first Board & Card game is picked when the server starts.
-export const GAMES = [shed, fuse, gala, tint, hoard, tunein, stickup, bumper, sumo, potato, pillowfort, sandbox];
+export const GAMES = [shed, fuse, gala, tint, hoard, tunein, tidewake, stickup, bumper, sumo, potato, pillowfort, sandbox];
 
 export const gamesById = new Map(GAMES.map((g) => [g.id, g]));
 
