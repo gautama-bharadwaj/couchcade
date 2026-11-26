@@ -97,6 +97,12 @@
 //                                            the hand entry, so `art` (and label, color…) pick it
 //   mapTile(g, art, x, y, r, seed), mapPiece(g, art, x, y, k, color), mapRoad(g, x1, y1, x2, y2,
 //   color, k), mapHarbor(g, x, y, k, art), mapCover(g, x, y, r)   pictures for the hexmap
+//   wheelRim(g, cx, cy, R), wheelMiddle(g, cx, cy, r, color|null), wheelPin(g, x, y, size, color)
+//                                            a frame, middle and pins for the color wheel (its
+//                                            swatches always keep their exact colors)
+//   drawSwatch(g, w, h, color, label)        the `swatch` block
+//   dialFace(g, x, y, w, h, xOf), dialNeedle(g, x, top, h), dialPin(g, x, top, color),
+//   dialMine(g, x, top, h, color)            the dial's band, crowd needle, others' markers, your needle
 // Then these fields draw with it: hand cards `art`; tally rows `art`; choose options `art`, `artColor`, and
 // `costs: [names]` (a row of icons); cards `art`, `artColor`, `icons: [names]`; hexmap tiles,
 // buildings and harbors `art`. Until the module loads (or if it fails) the labels show, so keep

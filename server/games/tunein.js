@@ -194,7 +194,7 @@ export default {
     // ---- Phone screens ------------------------------------------------------------
     const dial = (extra) => ({ key: 'dial', left: st.card?.[0] ?? '', right: st.card?.[1] ?? '', ...extra });
     const others = (id) => listeners().filter((g) => g !== id && st.needle.has(g)).map((g) => ({ value: st.needle.get(g), color: color(g) }));
-    const clueCard = () => (st.clue ? [{ label: `“${st.clue}”`, sub: `${name(st.dj)}'s clue`, color: color(st.dj) }] : []);
+    const clueCard = () => (st.clue ? [{ label: `“${st.clue}”`, sub: `${name(st.dj)}'s clue`, color: color(st.dj), art: 'mic', artColor: color(st.dj) }] : []);
 
     function screenFor(id) {
       if (!score.has(id)) return { title: 'Game in progress', lines: ['You can join the next game. Watch the TV!'] };
@@ -209,7 +209,7 @@ export default {
           title: `${st.reveal.zone}!`,
           dial: dial({ target: st.station, crowd: st.reveal.crowd, value: isDj ? null : (r?.value ?? null), pins: others(id), locked: true }),
           lines: [`The crew scores ${st.reveal.pts}.`, mine],
-          cards: [{ label: `Crew score ${st.crew}`, sub: `Your score ${score.get(id)}`, color: color(id) }],
+          cards: [{ label: `Crew score ${st.crew}`, sub: `Your score ${score.get(id)}`, color: color(id), art: 'note', artColor: ZONES.find((z) => z.pts === st.reveal.pts) ? ['#ff5a5f', '#ff9a4a', '#ffd166'][4 - st.reveal.pts] : '#c9ced8' }],
           footer: head,
         };
       }
@@ -221,7 +221,7 @@ export default {
             title: 'Pick a band',
             tag,
             lines: ['The station is at the white mark. Pick the card that makes it easiest to clue.'],
-            choose: { key: 'pick', options: st.offers.map((c, i) => ({ id: String(i), label: `${c[0]}  ↔  ${c[1]}`, sub: describe(st.station, c) })) },
+            choose: { key: 'pick', options: st.offers.map((c, i) => ({ id: String(i), label: `${c[0]}  ↔  ${c[1]}`, sub: describe(st.station, c), art: 'radio' })) },
             dial: dial({ left: 'Left idea', right: 'Right idea', target: st.station, locked: true, small: true }),
             footer: timer,
           };
@@ -336,7 +336,7 @@ export default {
       },
 
       playerView(id) {
-        return { screen: screenFor(id) };
+        return { screen: { art: 'tunein', ...screenFor(id) } }; // drawn radio glass and needles (public/art/tunein.js)
       },
 
       isOver: () => st.over,
