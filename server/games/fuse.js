@@ -382,13 +382,13 @@ export default {
 
     // ---- Phone screens --------------------------------------------------------
     // Every card in your hand can be tapped to read it; on your turn, ones you can't play right now are dimmed.
-    const cardView = (c, dim) => ({ id: c.id, label: ICON[c.kind], small: CARDS[c.kind].name, color: CARDS[c.kind].color, dim });
+    const cardView = (c, dim) => ({ id: c.id, label: ICON[c.kind], small: CARDS[c.kind].name, color: CARDS[c.kind].color, art: c.kind, dim });
 
     function screenFor(id) {
       if (!hands.has(id)) return { title: 'Game in progress', lines: ['You can join the next game. Watch the TV!'] };
       const hand = sortHand(hands.get(id));
       const me = current() === id;
-      const s = { title: '', lines: [], cards: [], actions: [] };
+      const s = { title: '', lines: [], cards: [], actions: [], art: 'fuse' }; // drawn by public/art/fuse.js
 
       if (st.winner) {
         s.title = st.winner === id ? 'You survived!' : `${name(st.winner)} wins`;
@@ -396,35 +396,38 @@ export default {
         return s;
       }
       if (!st.alive.has(id)) {
-        s.title = '💥 You blew up';
+        s.title = 'You blew up';
         s.lines = ['Watch the TV and enjoy the chaos.', `${st.alive.size} still standing.`];
+        s.cards.push({ label: 'KABOOM!', sub: 'Better luck next game.', color: '#ff4d3d', art: 'boom' });
         return s;
       }
 
       const odds = deck.length ? `${bombsLeft()} Bomb${bombsLeft() === 1 ? '' : 's'} in ${deck.length} cards` : '';
-      s.cards.push({ label: me ? (st.owed > 1 ? `Your turn: ${st.owed} draws to go` : 'Your turn') : `${name(current())}'s turn`, sub: odds, color: me ? '#ff9f1c' : '#3a4256' });
+      s.cards.push({ label: me ? (st.owed > 1 ? `Your turn: ${st.owed} draws to go` : 'Your turn') : `${name(current())}'s turn`, sub: odds, color: me ? '#ff9f1c' : '#3a4256', art: 'buddy', artColor: players.get(current())?.color });
 
       // Choices that take over the screen.
       if (me && st.phase === 'bomb') {
-        s.title = '💣 You drew a BOMB!';
+        s.title = 'You drew a BOMB!';
+        s.cards.push({ label: 'Live Bomb', sub: 'The fuse is lit!', color: '#ff4d3d', art: 'bomb' });
         s.lines = ['Douse it with a Bucket and hide it back in the crate, or keep your Bucket and gamble on the wires (1 in 3 survives).'];
         s.actions = [
-          { key: 'bucket', label: '🪣 Use a Bucket', style: 'primary' },
-          { key: 'gamble', label: '✂️ Cut a wire instead', style: 'secondary' },
+          { key: 'bucket', label: 'Use a Bucket', style: 'primary' },
+          { key: 'gamble', label: 'Cut a wire instead', style: 'secondary' },
         ];
         s.footer = `${st.left}s`;
         return s;
       }
       if (me && st.phase === 'wires') {
-        s.title = '✂️ Cut a wire!';
+        s.title = 'Cut a wire!';
         s.lines = [hand.some((c) => c.kind === 'bucket') ? 'Feeling lucky. One wire defuses it.' : 'No Bucket! One of these defuses the Bomb. The other two…'];
-        s.choose = { key: 'wire', options: WIRES.map((w) => ({ id: w.id, label: w.label, color: w.color })) };
+        s.choose = { key: 'wire', options: WIRES.map((w) => ({ id: w.id, label: w.label, color: w.color, art: 'wire', artColor: w.color })) };
         s.footer = `${st.left}s`;
         return s;
       }
       if (me && st.phase === 'hide') {
         s.title = 'Hide the Bomb';
         s.lines = ['Only you will know where it is.'];
+        s.cards.push({ label: 'Doused Bomb', sub: 'Pick its new hiding spot.', color: '#38b6ff', art: 'doused' });
         const opts = [
           { id: '0', label: 'On top', sub: 'Next player draws it' },
           { id: '1', label: '2nd from the top' },
@@ -440,7 +443,7 @@ export default {
       if (me && st.phase === 'nudge') {
         s.title = 'Nudge';
         s.lines = ['The top card of the crate is:'];
-        s.cards.push({ label: `${ICON[looks(st.nudgeCard.kind)]} ${CARDS[looks(st.nudgeCard.kind)].name}`, sub: looks(st.nudgeCard.kind) === 'bomb' ? 'Could be a Decoy… or not.' : '', color: CARDS[st.nudgeCard.kind].color });
+        s.cards.push({ label: CARDS[looks(st.nudgeCard.kind)].name, art: looks(st.nudgeCard.kind), sub: looks(st.nudgeCard.kind) === 'bomb' ? 'Could be a Decoy… or not.' : '', color: CARDS[st.nudgeCard.kind].color });
         s.actions = [
           { key: 'bury', label: 'Bury it at the bottom', style: 'primary' },
           { key: 'keep', label: 'Leave it on top', style: 'secondary' },
@@ -450,14 +453,14 @@ export default {
       }
       if (me && st.phase === 'target') {
         s.title = st.targeting.kind === 'swipe' ? 'Swipe from who?' : 'X-Ray who?';
-        s.choose = { key: 'target', options: targets(id, true).map((o) => ({ id: o, label: name(o), sub: `${hands.get(o).length} cards`, color: players.get(o)?.color })) };
+        s.choose = { key: 'target', options: targets(id, true).map((o) => ({ id: o, label: name(o), sub: `${hands.get(o).length} cards`, color: players.get(o)?.color, art: 'buddy', artColor: players.get(o)?.color })) };
         s.actions = [{ key: 'cancel', label: 'Never mind', style: 'secondary' }];
         s.footer = `${st.left}s`;
         return s;
       }
 
       if (st.guide.has(id)) {
-        s.title = '📖 What the cards do';
+        s.title = 'What the cards do';
         s.lines = [
           'On your turn, play as many cards as you like (or none), then draw one from the crate. Drawing ends your turn.',
           "Draw a Bomb and you're out, unless you douse it with a Bucket or cut the right wire. Last one standing wins.",
@@ -466,7 +469,7 @@ export default {
         // Cards in your hand first, then the rest.
         for (const k of [...KIND_ORDER].sort((x, y) => (count(y) > 0) - (count(x) > 0))) {
           const have = count(k);
-          s.cards.push({ label: `${ICON[k]} ${CARDS[k].name}${have ? ` · you have ${have}` : ''}`, sub: CARDS[k].text, color: CARDS[k].color });
+          s.cards.push({ label: `${CARDS[k].name}${have ? ` · you have ${have}` : ''}`, sub: CARDS[k].text, color: CARDS[k].color, art: k });
         }
         s.actions = [{ key: 'back', label: 'Back to my hand', style: 'primary' }];
         s.footer = me ? `${st.left}s` : '';
@@ -477,7 +480,7 @@ export default {
       if (peek) {
         s.title = peek.title;
         s.lines = peek.lines;
-        s.hand = { key: 'none', cards: peek.cards.map((k, i) => ({ id: `p${i}`, label: ICON[k], small: CARDS[k].name, color: CARDS[k].color, playable: true })) };
+        s.hand = { key: 'none', cards: peek.cards.map((k, i) => ({ id: `p${i}`, label: ICON[k], small: CARDS[k].name, color: CARDS[k].color, art: k, playable: true })) };
         s.actions = [{ key: 'ok', label: 'Got it', style: 'primary' }];
         s.footer = me ? `${st.left}s` : '';
         return s;
@@ -488,11 +491,11 @@ export default {
       s.hand = { key: 'sel', cards: hand.map((c) => ({ ...cardView(c, me && !canPlay(id, c)), selected: c === sel })) };
       if (sel) {
         const why = me && !canPlay(id, sel) ? WHY_NOT[sel.kind] : '';
-        s.cards.push({ label: `${ICON[sel.kind]} ${CARDS[sel.kind].name}`, sub: CARDS[sel.kind].text + (why ? ` ${why}` : ''), color: CARDS[sel.kind].color });
+        s.cards.push({ label: CARDS[sel.kind].name, art: sel.kind, sub: CARDS[sel.kind].text + (why ? ` ${why}` : ''), color: CARDS[sel.kind].color });
         if (me && canPlay(id, sel)) s.actions.push({ key: 'play', label: `Play ${CARDS[sel.kind].name}`, style: 'primary' });
       } else s.lines.push(me ? 'Tap a card to read it and play it, or draw to end your turn.' : 'Tap a card to read what it does.');
       if (me) s.actions.push({ key: 'draw', label: st.owed > 1 ? `Draw (${st.owed} to go)` : 'Draw and end turn', style: sel && canPlay(id, sel) ? 'secondary' : 'primary' });
-      s.actions.push({ key: 'guide', label: '📖 What do the cards do?', style: 'secondary' });
+      s.actions.push({ key: 'guide', label: 'What do the cards do?', style: 'secondary' });
       s.footer = me ? `${st.left}s` : '';
       return s;
     }
@@ -694,7 +697,7 @@ export default {
   },
 };
 
-// Card faces on the phone: an icon plus the name underneath.
+// Card labels on the phone if the drawn art (public/art/fuse.js) can't load: an icon plus the name.
 const ICON = { bomb: '💣', decoy: '💣', bucket: '🪣', scope: '🔭', nudge: '👉', duck: '🦆', potato: '🥔', boomerang: '🪃', stir: '🌀', backdoor: '🚪', swipe: '🧲', xray: '👁️' };
 
 // Shown under a card you tapped on your turn but can't play right now.

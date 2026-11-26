@@ -103,6 +103,10 @@
     #screen .pcard small { font-size: .62rem; font-weight: 800; margin-top: 4px; text-transform: uppercase; letter-spacing: .02em; }
     #screen .pcard:disabled, #screen .pcard.dim { opacity: .3; }
     #screen .pcard.sel { opacity: 1; transform: translateY(-8px); box-shadow: 0 0 0 3px #f2f4f8; }
+    #screen .pcard.drawn { width: 64px; height: 92px; border: 0; border-radius: 9px; background: none; transition: transform .12s; }
+    #screen .pcard.drawn:disabled, #screen .pcard.drawn.dim { opacity: .38; filter: saturate(.5); }
+    #screen .pcard.drawn.sel { box-shadow: 0 0 0 3px #f2f4f8, 0 8px 18px rgba(0,0,0,.5); }
+    #screen .pcard.drawn:not(:disabled):active { transform: scale(.95); }
     #screen .pcard.wild { background: linear-gradient(90deg, #e8484d 0 25%, #2f8fe6 0 50%, #2fb866 0 75%, #e6a817 0) bottom 10px center / 70% 8px no-repeat, #141824; }
     #screen .row { display: flex; gap: 8px; }
     #screen .row input { flex: 1; min-width: 0; font-size: 1.1rem; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: inherit; user-select: text; -webkit-user-select: text; }

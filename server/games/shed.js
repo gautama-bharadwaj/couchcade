@@ -198,7 +198,7 @@ export default {
 
     // ---- Phone screens --------------------------------------------------------
     function cardView(c, canPlay) {
-      return { id: c.id, label: c.label, small: c.small, color: c.color ? colorById.get(c.color).hex : null, playable: canPlay };
+      return { id: c.id, label: c.label, small: c.small, color: c.color ? colorById.get(c.color).hex : null, art: c.kind, playable: canPlay };
     }
 
     function screenFor(id) {
@@ -206,7 +206,7 @@ export default {
       const hand = sortHand(hands.get(id));
       const myTurn = current() === id && !st.winner;
       const t = top();
-      const s = { title: '', lines: [], cards: [] };
+      const s = { title: '', lines: [], cards: [], art: 'shed' }; // cards drawn by public/art/shed.js
 
       if (st.winner) {
         s.title = st.winner === id ? 'You won!' : `${name(st.winner)} won`;
@@ -215,11 +215,11 @@ export default {
         return s;
       }
 
-      s.cards.push({ label: `Top: ${cardName(t, st.color)}`, sub: myTurn ? 'Your turn!' : `${name(current())}'s turn`, color: colorById.get(st.color).hex });
+      s.cards.push({ label: `Top: ${cardName(t, st.color)}`, sub: myTurn ? 'Your turn!' : `${name(current())}'s turn`, color: colorById.get(st.color).hex, art: t.kind === 'number' ? `number:${t.value}` : t.kind, artColor: colorById.get(st.color).hex });
 
       if (myTurn && st.choosingWild) {
         s.title = 'Pick a color';
-        s.choose = { key: 'color', options: COLORS.map((c) => ({ id: c.id, label: c.label, color: c.hex })) };
+        s.choose = { key: 'color', options: COLORS.map((c) => ({ id: c.id, label: c.label, color: c.hex, art: 'paint', artColor: c.hex })) };
         s.footer = `${st.left}s`;
         return s;
       }
