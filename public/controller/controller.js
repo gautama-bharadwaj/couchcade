@@ -433,6 +433,7 @@ function renderScreen(screen) {
     if (screen.swatch.label) sw.append(el('span', '', screen.swatch.label));
     wrap.append(sw);
   }
+  if (screen.hero && art?.drawHero) wrap.append(buildHero(screen.hero, el, art)); // after tag/swatch
   for (const line of screen.lines ?? []) wrap.append(el('p', '', line));
   if (screen.tally) wrap.append(buildTally(screen.tally, el, art));
 
@@ -526,12 +527,20 @@ function renderScreen(screen) {
   if (screen.grid) {
     const { key, cols = 5, cells = [], locked } = screen.grid;
     const grid = el('div', `grid${locked ? ' locked' : ''}`);
+    const cellArts = [];
     grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
     for (const c of cells) {
       const b = el('button', `gcell${c.dim ? ' dim' : ''}${c.ring ? ' ring' : ''}`);
       b.style.background = c.color ?? '';
       if (c.ink) b.style.color = c.ink;
       if (c.ring) b.style.outlineColor = c.ring;
+      if (c.art && art?.drawCell) {
+        // drawn tile behind the word, sized once the grid is laid out
+        b.classList.add('drawn');
+        const cv = el('canvas', 'cellArt');
+        cellArts.push([cv, c]);
+        b.append(cv);
+      }
       const label = el('span', 'w', c.label);
       if (c.label?.length > 6) label.style.fontSize = `${Math.max(0.46, 0.78 - (c.label.length - 6) * 0.06)}rem`;
       b.append(label);
@@ -546,6 +555,24 @@ function renderScreen(screen) {
       grid.append(b);
     }
     wrap.append(grid);
+    if (cellArts.length) {
+      requestAnimationFrame(() => {
+        const dpr = window.devicePixelRatio || 1;
+        for (const [cv, c] of cellArts) {
+          const w = cv.parentElement?.clientWidth || 60;
+          const h = cv.parentElement?.clientHeight || 54;
+          cv.width = Math.round(w * dpr);
+          cv.height = Math.round(h * dpr);
+          const g = cv.getContext('2d');
+          g.scale(dpr, dpr);
+          try {
+            art.drawCell(g, c.art, w, h, c);
+          } catch (err) {
+            console.error('art failed to draw', err);
+          }
+        }
+      });
+    }
   }
 
   if (screen.wheel) wrap.append(buildWheel(screen.wheel, el));
@@ -561,6 +588,29 @@ function renderScreen(screen) {
     }
     wrap.append(acts);
   }
+}
+
+// A big illustrated card (see "hero" in server/games/index.js), e.g. a secret role. With `flip` it
+// turns over from its back the first time it shows (not again when the screen redraws).
+const heroesSeen = new Set();
+function buildHero(h, el, art) {
+  const small = !!h.small;
+  const w = small ? 120 : 210;
+  const ht = Math.round(w * 1.42);
+  const box = el('div', `hero${small ? ' small' : ''}`);
+  box.style.width = `${w}px`;
+  box.style.height = `${ht}px`;
+  const front = artCanvas(w, ht, (g) => art.drawHero(g, h.art, w / 2, ht / 2, w - 6, ht - 6), 'art face');
+  box.append(front);
+  const seenKey = h.key ?? h.art;
+  if (h.flip && art.drawHeroBack && !heroesSeen.has(seenKey)) {
+    const back = artCanvas(w, ht, (g) => art.drawHeroBack(g, w / 2, ht / 2, w - 6, ht - 6), 'art back');
+    box.append(back);
+    box.classList.add('flipping');
+    navigator.vibrate?.([30, 60, 30]);
+  }
+  heroesSeen.add(seenKey);
+  return box;
 }
 
 // Counters (see "tally" in server/games/index.js): groups of resource-style chips, each with

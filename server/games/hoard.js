@@ -314,9 +314,10 @@ export default {
             id: String(x.i),
             label: x.word.toUpperCase(),
             color: show ? ownerColor(x.owner) : PARCHMENT,
-            ink: show && (x.owner === 'dragon') ? '#ff8f8f' : INK,
-            dim: x.revealed,
-            mark: x.revealed ? (x.owner === 'dragon' ? 'DRAGON' : x.owner === 'dust' ? 'dust' : '✓ gem') : x.owner === 'dragon' && show ? 'DRAGON' : undefined,
+            ink: x.revealed ? (x.owner === 'dust' ? '#c8bca2' : '#fff6e0') : show && x.owner === 'dragon' ? '#ffd2d2' : INK,
+            art: x.revealed ? x.owner : show ? `key:${x.owner}` : 'hidden',
+            dim: false,
+            mark: x.revealed ? (x.owner === 'dragon' ? 'DRAGON' : x.owner === 'dust' ? 'dust' : '✓ gem') : x.owner === 'dragon' && show ? 'DRAGON' : undefined, // shown only without art
             dots: voted.map(colorOf),
             ring: mine === x.i ? '#ffffff' : undefined,
             disabled: x.revealed,
@@ -328,7 +329,7 @@ export default {
     const clueCard = () => {
       if (!st.clue) return [];
       const t = team(st.clue.team);
-      return [{ label: `${st.clue.word.toUpperCase()} · ${st.clue.n}`, sub: `${t ? (coop ? 'The' : t.name) : ''} Keeper's clue · ${st.guessesLeft} guess${st.guessesLeft === 1 ? '' : 'es'} left`, color: t?.color }];
+      return [{ art: t ? `crest:${t.key}` : undefined, label: `${st.clue.word.toUpperCase()} · ${st.clue.n}`, sub: `${t ? (coop ? 'The' : t.name) : ''} Keeper's clue · ${st.guessesLeft} guess${st.guessesLeft === 1 ? '' : 'es'} left`, color: t?.color }];
     };
 
     function screenFor(id) {
@@ -367,7 +368,7 @@ export default {
           title: 'Dragon Hoard',
           tag,
           lines,
-          cards: coop ? [] : teams.map((x) => ({ label: `${x.name}: ${x.members.map(name).join(', ')}`, sub: `Keeper ${name(x.keeper)} · ${x.total} gems${x === teams[0] ? ' · goes first' : ''}`, color: x.color })),
+          cards: coop ? [] : teams.map((x) => ({ art: `crest:${x.key}`, label: `${x.name}: ${x.members.map(name).join(', ')}`, sub: `Keeper ${name(x.keeper)} · ${x.total} gems${x === teams[0] ? ' · goes first' : ''}`, color: x.color })),
           ...(keeper ? { grid: grid({ key: true }) } : {}),
           actions: st.ready.has(id) ? [] : [{ key: 'ready', label: 'Got it' }],
           footer: `${humansNotReady()} still reading · ${timer}`,
@@ -502,7 +503,7 @@ export default {
       },
 
       playerView(id) {
-        return { screen: screenFor(id) };
+        return { screen: { ...screenFor(id), art: 'hoard' } };
       },
 
       isOver: () => st.over,
