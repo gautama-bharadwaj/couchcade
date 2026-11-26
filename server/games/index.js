@@ -14,6 +14,7 @@
 //              or { type: 'screens' },                          // phone shows the game's own screens (see below)
 //     create(ctx) -> instance,                                 // ctx = { players: Map<id, Player>, arena }
 //     rules?: [{ title, text, art?, seconds? }],               // how-to-play intro (see "Rules" below)
+//     rulesVoice?: false,                                      // show the rules without the narrator reading them
 //   }
 //   instance = {
 //     update(dt),            // advance the simulation; read player.input {x, y, a, b}
@@ -104,7 +105,9 @@
 // show them too). `seconds` defaults to reading time. The game is paused while it plays; the host
 // can skip it or step through it, and replay it mid-game (phone "Rules" button, R on the TV).
 // `art` is a name passed to the TV renderer's optional drawRules(ctx, art, t, box) to animate the
-// step (t = seconds into the step, box = { x, y, w, h } to draw in); without it, text only.
+// step (t = seconds into the step, box = { x, y, w, h } to draw in); without it, text only. A game
+// can keep its pictures out of the renderer instead, in public/tv/games/rules/<id>.js (registered
+// in public/tv/games/rules/index.js); the renderer's own drawRules wins if it has both.
 //
 // The phone re-renders only when the screen changes, and gets a fresh view right after any action.
 // Never trust an action: check the phase, the player and the value in onAction.

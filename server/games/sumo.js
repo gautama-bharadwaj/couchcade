@@ -63,6 +63,12 @@ export default {
   minPlayers: 1, // 1 = practice mode; it's a real game from 2
   maxPlayers: 8,
   controller: { buttons: [{ id: 'a', label: 'Charge' }, { id: 'b', label: 'Dodge' }] },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/sumo.js.
+  rules: [
+    { art: 'charge', title: 'Charge and lunge', text: 'Hold A to charge, let go to lunge. The longer you hold, the harder you hit, and charging braces you.' },
+    { art: 'dodge', title: 'Dodge with B', text: 'B sidesteps. Dodge just before a lunge lands and they stumble right past you.' },
+    { art: 'platform', title: 'A slippery stage', text: 'The platform spins and tilts, then its edge crumbles. Last one on wins the round. First to 3 wins.' },
+  ],
 
   create({ players, arena }) {
     const cx = arena.w / 2;
