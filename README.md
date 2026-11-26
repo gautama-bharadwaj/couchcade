@@ -108,7 +108,7 @@ Get the file for your computer from the [Releases page](https://github.com/gauta
 | Windows | `Couchcade-windows-x64.exe` | Double-click it. A console window shows the addresses; close it to stop. |
 | Linux (x64, or arm64 such as a 64-bit Raspberry Pi) | `couchcade-linux-x64` / `couchcade-linux-arm64` | `chmod +x couchcade-linux-*` and run it. |
 
-The app opens the TV page in your default browser by itself. The downloads aren't signed yet, so the first launch needs one extra click; see [Unsigned downloads](#unsigned-downloads). On a Mac, a small Couchcade window shows the addresses while it runs: **Open TV Page** brings the TV page back and **Quit Couchcade** stops it. On an Intel Mac, use `npx` or run it from source.
+The app opens the TV page in your default browser by itself. The downloads aren't signed yet, so the first launch needs one extra click; see [Unsigned downloads](#unsigned-downloads). On a Mac, Couchcade lives in the menu bar while it runs: click the game controller icon at the top right of the screen for the phone address, **Open TV Page** to bring the TV page back, **Copy Phone Link**, and **Quit Couchcade** to stop it. On an Intel Mac, use `npx` or run it from source.
 
 ### With Node.js: `npx couchcade`
 

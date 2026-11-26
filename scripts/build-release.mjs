@@ -122,8 +122,8 @@ console.log(`Smoke test it with: node scripts/smoke.mjs --cmd ${path.relative(RO
 
 /**
  * A minimal .app: Info.plist plus the executable. Double-clicking starts the server, opens the
- * TV page in the default browser and shows a small native dialog with the addresses and a Quit
- * button (showMacWindow in server/runtime.js). LSUIElement keeps it out of the Dock: the
+ * TV page in the default browser and puts a menu bar icon up with the phone address, Open TV Page
+ * and Quit (showMacWindow in server/runtime.js). LSUIElement keeps it out of the Dock: the
  * executable isn't a Cocoa app, so a Dock icon would only bounce and never answer Quit.
  * NSAppSleepDisabled: App Nap would otherwise slow its timers once the browser is in front,
  * and the game's ticks and turn timers would stutter.

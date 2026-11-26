@@ -34,10 +34,11 @@ export function openBrowser(url) {
   } catch {}
 }
 
-// The Mac app's window. A Node single executable can't draw a window itself, and a .app that
-// shows nothing leaves people unsure whether it's running and with no way to quit it. So when
-// the app is opened from Finder, a small native dialog (AppleScript, via the osascript that
-// ships with macOS) stays up while it runs: the addresses, "Open TV Page" and "Quit".
+// The Mac app's menu bar icon. A Node single executable can't draw any UI itself, and a .app
+// that shows nothing leaves people unsure whether it's running and with no way to quit it. So
+// when the app is opened from Finder, a small menu bar item (JavaScript for Automation run by
+// the osascript that ships with macOS) stays up while it runs: the phone address, "Open TV Page",
+// "Copy Phone Link" and "Quit Couchcade". It never takes focus or blocks the screen.
 const BUNDLE_ID = 'io.github.gautama-bharadwaj.couchcade'; // keep in step with scripts/build-release.mjs
 
 /**
@@ -50,48 +51,138 @@ export const MAC_WINDOW =
   (process.env.COUCHCADE_WINDOW !== '0' && process.platform === 'darwin' && Boolean(sea) &&
     (process.env.__CFBundleIdentifier === BUNDLE_ID || (process.ppid === 1 && !process.stdout.isTTY)));
 
-/** Run an AppleScript with string arguments (passed as argv, so nothing needs escaping). Resolves to its output, or null on error. */
+const children = new Set();
+process.on('exit', () => children.forEach((c) => c.kill()));
+
+/** Start osascript with a script and string arguments (passed as argv, so nothing needs escaping). Null if it can't start. */
+function osascript(flags, script, args) {
+  let child;
+  try {
+    child = spawn('osascript', [...flags, '-e', script, ...args], { stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch {
+    return null;
+  }
+  children.add(child);
+  child.on('exit', () => children.delete(child));
+  return child;
+}
+
+/** Run an AppleScript to the end. Resolves to its output, or null on error. */
 function appleScript(lines, args) {
   return new Promise((resolve) => {
-    const flags = ['on run argv', ...lines, 'end run'].flatMap((l) => ['-e', l]);
+    const child = osascript([], ['on run argv', ...lines, 'end run'].join('\n'), args);
+    if (!child) return resolve(null);
     let out = '';
-    let child;
-    try {
-      child = spawn('osascript', [...flags, ...args], { stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch {
-      return resolve(null);
-    }
     child.stdout.on('data', (d) => (out += d));
     child.on('error', () => resolve(null));
     child.on('exit', (code) => resolve(code === 0 ? out.trim() : null));
-    windowChild = child;
   });
 }
-let windowChild = null;
-process.on('exit', () => windowChild?.kill());
+
+// The menu bar item. It reports back one word per line on stdout: "ready" once the icon is up,
+// then "open" or "quit" when those menu items are picked. Copying the link happens in the script.
+const MENU_BAR_SCRIPT = `
+function run(argv) {
+  ObjC.import('Cocoa');
+  const joinUrl = argv[0];
+  const out = $.NSFileHandle.fileHandleWithStandardOutput;
+  const say = (word) => out.writeData($(word + '\\n').dataUsingEncoding($.NSUTF8StringEncoding));
+  const app = $.NSApplication.sharedApplication;
+  app.setActivationPolicy($.NSApplicationActivationPolicyAccessory); // no Dock icon, never steals focus
+
+  ObjC.registerSubclass({
+    name: 'CouchcadeMenuTarget',
+    methods: {
+      'openTV:': { types: ['void', ['id']], implementation: () => say('open') },
+      'copyLink:': {
+        types: ['void', ['id']],
+        implementation: () => {
+          const board = $.NSPasteboard.generalPasteboard;
+          board.clearContents;
+          board.setStringForType($(joinUrl), $.NSPasteboardTypeString);
+        },
+      },
+      'quit:': { types: ['void', ['id']], implementation: () => say('quit') },
+    },
+  });
+  const target = $.CouchcadeMenuTarget.alloc.init;
+
+  const item = $.NSStatusBar.systemStatusBar.statusItemWithLength($.NSVariableStatusItemLength);
+  let icon = null;
+  try { icon = $.NSImage.imageWithSystemSymbolNameAccessibilityDescription('gamecontroller.fill', 'Couchcade'); } catch (e) {}
+  if (icon && !icon.isNil()) {
+    icon.setTemplate(true);
+    item.button.image = icon;
+  } else {
+    item.button.title = 'Couchcade';
+  }
+  item.button.toolTip = 'Couchcade is running';
+
+  const menu = $.NSMenu.alloc.init;
+  menu.autoenablesItems = false;
+  const add = (title, action, key) => {
+    const entry = $.NSMenuItem.alloc.initWithTitleActionKeyEquivalent(title, action || null, key || '');
+    if (action) entry.target = target;
+    else entry.enabled = false;
+    menu.addItem(entry);
+  };
+  add('Couchcade is running');
+  add('Phones join: ' + joinUrl);
+  menu.addItem($.NSMenuItem.separatorItem);
+  add('Open TV Page', 'openTV:', 't');
+  add('Copy Phone Link', 'copyLink:', 'c');
+  menu.addItem($.NSMenuItem.separatorItem);
+  add('Quit Couchcade', 'quit:', 'q');
+  item.menu = menu;
+
+  say('ready');
+  app.run;
+}
+`;
 
 /**
- * Show the running-app dialog until the person quits. "Open TV Page" reopens the browser and
- * shows the dialog again. If osascript is missing or keeps failing, the server just keeps
- * running without it (the TV page is already open).
+ * Show the menu bar icon until the person quits. If it can't start (osascript missing, or a
+ * macOS that won't run it), fall back to a one-time dialog that can be dismissed for good.
+ * If the icon goes away without Quit (osascript killed), it's put back, a few times at most.
  */
 export async function showMacWindow({ tvUrl, joinUrl, onQuit }) {
-  const message = `Couchcade is running.\n\nTV screen: ${tvUrl}\nPhones join: ${joinUrl}\n(scan the QR code on the TV; same Wi-Fi)\n\nKeep this window open while you play. Quitting ends the games for everyone.`;
-  let failures = 0;
-  while (failures < 3) {
-    const started = Date.now();
-    const answer = await appleScript(
-      [
-        'activate',
-        'display dialog (item 1 of argv) with title "Couchcade" buttons {"Quit Couchcade", "Open TV Page"} default button "Open TV Page" with icon note',
-        'return button returned of result',
-      ],
-      [message],
-    );
-    if (answer === 'Quit Couchcade') return onQuit();
-    if (answer === 'Open TV Page') openBrowser(tvUrl);
-    else if (Date.now() - started < 5000) failures++; // failed straight away; don't spin
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await new Promise((resolve) => {
+      const child = osascript(['-l', 'JavaScript'], MENU_BAR_SCRIPT, [joinUrl]);
+      if (!child) return resolve('failed');
+      let ready = false;
+      let buffer = '';
+      child.stdout.on('data', (d) => {
+        buffer += d;
+        let nl;
+        while ((nl = buffer.indexOf('\n')) >= 0) {
+          const word = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (word === 'ready') ready = true;
+          else if (word === 'open') openBrowser(tvUrl);
+          else if (word === 'quit') return resolve('quit');
+        }
+      });
+      child.on('error', () => resolve('failed'));
+      child.on('exit', () => resolve(ready ? 'gone' : 'failed'));
+    });
+    if (result === 'quit') return onQuit();
+    if (result === 'failed') break;
   }
+  await showFallbackDialog({ tvUrl, joinUrl, onQuit });
+}
+
+/** The fallback: one dialog with the addresses. "Keep Running" closes it; the server goes on. */
+async function showFallbackDialog({ tvUrl, joinUrl, onQuit }) {
+  const message = `Couchcade is running.\n\nTV screen: ${tvUrl}\nPhones join: ${joinUrl}\n(scan the QR code on the TV; same Wi-Fi)\n\nQuitting ends the games for everyone. To quit later, open Activity Monitor and quit "couchcade".`;
+  const answer = await appleScript(
+    [
+      'display dialog (item 1 of argv) with title "Couchcade" buttons {"Quit Couchcade", "Keep Running"} default button "Keep Running" with icon note',
+      'return button returned of result',
+    ],
+    [message],
+  );
+  if (answer === 'Quit Couchcade') onQuit();
 }
 
 /** A one-off alert, for when the Mac app can't start (nobody would see the terminal message). */

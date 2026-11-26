@@ -41,7 +41,7 @@ bin/couchcade.js        command-line entry (npx couchcade, the downloads): flags
 server/
   index.js              HTTP (pages + QR) and WebSocket hub, 60 Hz loop, startup (port, banner)
   address.js            which LAN address goes in the QR code, and the alternatives
-  runtime.js            packaged app or source? (node:sea), opening the browser, the Mac app's window
+  runtime.js            packaged app or source? (node:sea), opening the browser, the Mac app's menu bar icon
   log.js                buffered, leveled logging (see Logging)
   lobby.js              who's here, including bots
   session.js            shared game flow (pick, start, how-to-play intro, results)
