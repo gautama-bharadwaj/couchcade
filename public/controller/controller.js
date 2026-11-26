@@ -486,10 +486,17 @@ function renderScreen(screen) {
     const { key, cards = [] } = screen.hand;
     const hand = el('div', 'hand');
     for (const c of cards) {
-      const b = el('button', `pcard${c.color ? '' : ' wild'}${c.dim ? ' dim' : ''}${c.selected ? ' sel' : ''}`);
-      if (c.color) b.style.setProperty('--card', c.color);
-      b.append(document.createTextNode(c.label));
-      if (c.small) b.append(el('small', '', c.small));
+      const drawn = !!(art?.drawHandCard && c.art);
+      const b = el('button', `pcard${drawn ? ' drawn' : c.color ? '' : ' wild'}${c.dim ? ' dim' : ''}${c.selected ? ' sel' : ''}`);
+      if (drawn) {
+        // An illustrated card from the art module; the label stays for screen readers.
+        b.setAttribute('aria-label', c.small ? `${c.label} ${c.small}` : c.label);
+        b.append(artCanvas(64, 92, (g) => art.drawHandCard(g, c, 64, 92)));
+      } else {
+        if (c.color) b.style.setProperty('--card', c.color);
+        b.append(document.createTextNode(c.label));
+        if (c.small) b.append(el('small', '', c.small));
+      }
       b.disabled = c.playable === false;
       b.addEventListener('click', () => act(key, c.id));
       hand.append(b);
