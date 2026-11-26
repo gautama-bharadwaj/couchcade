@@ -574,7 +574,7 @@ async function start() {
   }
   lines.push(
     `  Logs:        ${log.file ?? 'terminal only'} (level ${log.level}; LOG_LEVEL=debug for more)${LOG_API_OFF ? '' : ` · http://localhost:${port}/api/logs`}`,
-    MAC_WINDOW ? '  Quit:        click Quit Couchcade in its window.' : '  Quit:        press Ctrl+C, or close this window.',
+    MAC_WINDOW ? '  Quit:        click the game controller icon in the menu bar, then Quit Couchcade.' : '  Quit:        press Ctrl+C, or close this window.',
     '',
   );
   console.log(lines.join('\n'));
