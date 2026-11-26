@@ -133,7 +133,7 @@ jobs:
       - name: Publish
         run: |
           if ! npm view couchcade name > /dev/null 2>&1; then
-            echo "::warning::couchcade isn't on npm yet. Publish the first version by hand, then set up trusted publishing (see the README, Releases)."
+            echo "::warning::couchcade isn't on npm yet. Publish the first version by hand, then set up trusted publishing (see CONTRIBUTING.md, Releasing)."
             exit 0
           fi
           v="$(node -p "require('./package.json').version")"
