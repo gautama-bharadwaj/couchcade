@@ -81,6 +81,13 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/tint.js.
+  rules: [
+    { art: 'wheel', title: 'Guess the secret color', text: 'Each turn one player is the Teller. Their phone shows a secret color from the big wheel.' },
+    { art: 'clue1', title: 'A one-word clue', text: 'The Teller gives one word, like Mango. No plain color names! Everyone taps the swatch they think it is.' },
+    { art: 'clue2', title: 'Then a two-word clue', text: 'Move your pin or keep it. Keep a good first guess and you score a bonus point.' },
+    { art: 'score', title: 'Closer scores more', text: 'Bullseye is 4, one step away 3, then 2, then 1. The Teller scores as much as the best guess.' },
+  ],
 
   create({ players }) {
     const roster = shuffle([...players.values()].filter((p) => p.connected).map((p) => p.id));

@@ -8,6 +8,7 @@
 import { renderers } from './games/index.js';
 import audio from './audio.js';
 import { drawRulesOverlay } from './rules.js';
+import { rulesArt } from './games/rules/index.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('canvas');
@@ -248,7 +249,7 @@ function onIntro(msg) {
   const shown = isNew ? 0 : now - intro.at; // same step re-sent (someone joined): keep its animation going
   intro = { step: msg.intro.step, id: msg.intro.id, at: now - shown, until: now + msg.intro.msLeft };
   const step = msg.rules?.[msg.intro.step];
-  if (isNew && step) audio.say(step.text, { interrupt: true, rate: 1, delay: 0.25 });
+  if (isNew && step && msg.rulesVoice !== false) audio.say(step.text, { interrupt: true, rate: 1, delay: 0.25 });
 }
 
 // --- Rendering -------------------------------------------------------------------
@@ -309,6 +310,7 @@ function frame() {
       frac: (now - intro.at) / Math.max(1, intro.until - intro.at),
       title: phase.games.find((g) => g.id === phase.gameId)?.title ?? '',
       renderer: renderers[phase.gameId],
+      art: rulesArt[phase.gameId],
       hostName: phase.players.find((p) => p.id === phase.hostId)?.name,
       now,
       arena,

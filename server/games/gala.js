@@ -48,6 +48,15 @@ export default {
   minPlayers: 4,
   maxPlayers: 8,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/gala.js.
+  rules: [
+    { art: 'roles', title: 'Thieves among the guests', text: 'One or two guests are secretly Thieves. Your phone shows your role. Keep it to yourself!' },
+    { art: 'night', title: 'Night: pick a room', text: 'Everyone secretly picks a room. Thieves can steal a gem, lie low, or plant fake evidence on someone.' },
+    { art: 'clues', title: 'Morning: what did you see?', text: 'Your phone shows who shared your room. Saw a gem vanish? You get a clue about who took it.' },
+    { art: 'powers', title: 'Special guests', text: 'The Detective checks one guest every other night. The Bodyguard guards a room. The Gossip posts anonymous notes on the TV.' },
+    { art: 'vote', title: 'Talk, then vote', text: 'Argue it out, then everyone votes. The most votes is escorted out. Vote out an innocent and you lose your next vote.' },
+    { art: 'win', title: 'Who wins?', text: 'Guests win by catching every Thief. Thieves win by stealing enough gems, or by lasting until dawn.' },
+  ],
 
   create({ players }) {
     // Roster is fixed at the start; people who join mid-game watch until the next game.

@@ -15,9 +15,10 @@ const ART = { x: 300, y: 150, w: 1000, h: 430 }; // where the game draws its pic
  * @param {number} o.frac      0..1, how much of this step's time has passed
  * @param {string} o.title     the game's title
  * @param {object} [o.renderer] the game's TV renderer
+ * @param {Function} [o.art]   pictures for games whose renderer has no drawRules (public/tv/games/rules/)
  * @param {string} [o.hostName]
  */
-export function drawRulesOverlay(ctx, { steps, step, t, frac, title, renderer, hostName, now, arena }) {
+export function drawRulesOverlay(ctx, { steps, step, t, frac, title, renderer, art, hostName, now, arena }) {
   const W = arena.w;
   const cur = steps[step];
   if (!cur) return;
@@ -37,9 +38,10 @@ export function drawRulesOverlay(ctx, { steps, step, t, frac, title, renderer, h
     ctx.fill();
   }
 
-  if (cur.art && renderer?.drawRules) {
+  const drawArt = renderer?.drawRules ?? art;
+  if (cur.art && drawArt) {
     try {
-      renderer.drawRules(ctx, cur.art, t, ART, now);
+      drawArt(ctx, cur.art, t, ART, now);
     } catch (err) {
       console.error('rules art failed', err);
     }

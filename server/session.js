@@ -52,6 +52,7 @@ export class Session {
       players: this.lobby.summary(),
       results: this.results,
       rules: this.phase === 'playing' ? this.def.rules ?? null : null,
+      rulesVoice: this.def.rulesVoice !== false, // false: the TV shows the rules without reading them out
       // msLeft is for this step, as of sending; the TV counts down from when it arrives.
       intro: this.intro ? { step: this.intro.step, id: this.intro.stepAt, msLeft: Math.max(0, Math.round(this.intro.stepAt + stepMs(this.def.rules[this.intro.step]) - Date.now())) } : null,
     };

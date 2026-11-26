@@ -36,6 +36,14 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { type: 'screens' },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/shed.js.
+  rules: [
+    { art: 'match', title: 'Empty your hand first', text: "Play a card that matches the top card's color, number or symbol. Wilds go on anything, and you pick the color." },
+    { art: 'draw', title: 'Nothing fits? Draw one', text: 'If the new card fits, you may play it. If not, keep it and pass.' },
+    { art: 'specials', title: 'Special cards', text: 'Skip jumps the next player. Reverse turns play around. Draw 2 makes the next player draw two and miss their turn.' },
+    { art: 'stack', title: 'Stack the draws', text: 'Hit by a Draw 2? Play your own +2 or +4, and the growing total passes to the next player.' },
+    { art: 'last', title: 'One card left? Say so!', text: 'Tap Last card! on your phone. Forget, and anyone can catch you: you draw two.' },
+  ],
 
   create({ players }) {
     const order = shuffle([...players.values()].filter((p) => p.connected).map((p) => p.id));

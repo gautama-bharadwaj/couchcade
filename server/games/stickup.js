@@ -112,6 +112,13 @@ export default {
   minPlayers: 2,
   maxPlayers: 8,
   controller: { buttons: [{ id: 'a', label: 'Jump' }, { id: 'b', label: 'Hit' }] },
+  // How to play, shown on the TV at the start (host can skip). Pictures: public/tv/games/rules/stickup.js.
+  rulesVoice: false, // on-screen text only: no narrator in this game
+  rules: [
+    { art: 'move', title: 'Move, jump, hit', text: 'The stick moves and aims. A jumps, twice for a double jump. B hits.' },
+    { art: 'weapons', title: 'Grab a weapon', text: 'Crates parachute in. Walk into one to pick up what is inside. Headshots hurt more.' },
+    { art: 'win', title: 'Last one standing', text: 'You are out at zero health or if you fall off. Win 5 rounds to win the match.' },
+  ],
 
   create({ players, arena: size }) {
     const fighters = new Map(); // id -> fighter
