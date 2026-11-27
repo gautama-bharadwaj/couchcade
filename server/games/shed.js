@@ -217,15 +217,21 @@ export default {
 
       s.cards.push({ label: `Top: ${cardName(t, st.color)}`, sub: myTurn ? 'Your turn!' : `${name(current())}'s turn`, color: colorById.get(st.color).hex, art: t.kind === 'number' ? `number:${t.value}` : t.kind, artColor: colorById.get(st.color).hex });
 
+      const canPlay = (c) => myTurn && playable(c) && (!st.drewThisTurn || c.id === st.drewThisTurn);
+
       if (myTurn && st.choosingWild) {
+        // The hand stays in view (the wild raised) so you can pick a color with your cards in mind,
+        // tap another card to play that instead, or go back.
         s.title = 'Pick a color';
+        s.lines.push('Changed your mind? Tap Back, or tap another card to play it instead.');
         s.choose = { key: 'color', options: COLORS.map((c) => ({ id: c.id, label: c.label, color: c.hex, art: 'paint', artColor: c.hex })) };
+        s.hand = { key: 'play', cards: hand.map((c) => ({ ...cardView(c, canPlay(c)), selected: c === st.choosingWild })) };
+        s.actions = [{ key: 'back', label: 'Back', style: 'secondary' }];
         s.footer = `${st.left}s`;
         return s;
       }
 
       s.title = myTurn ? 'Your turn' : 'Your hand';
-      const canPlay = (c) => myTurn && playable(c) && (!st.drewThisTurn || c.id === st.drewThisTurn);
       s.hand = { key: 'play', cards: hand.map((c) => cardView(c, canPlay(c))) };
 
       s.actions = [];
@@ -340,11 +346,20 @@ export default {
         if (current() !== id) return;
 
         if (key === 'color' && st.choosingWild && colorById.has(value)) return play(id, st.choosingWild, value);
-        if (st.choosingWild) return;
+        if (key === 'back') {
+          st.choosingWild = null;
+          return;
+        }
+        if (st.choosingWild && key !== 'play') return;
 
         if (key === 'play') {
           const card = hand.find((c) => c.id === value);
+          if (card && card === st.choosingWild) {
+            st.choosingWild = null; // tapping the raised wild again puts it back
+            return;
+          }
           if (!card || !playable(card) || (st.drewThisTurn && card.id !== st.drewThisTurn)) return;
+          st.choosingWild = null;
           if (card.kind === 'wild' || card.kind === 'wild4') {
             st.choosingWild = card;
             return;
