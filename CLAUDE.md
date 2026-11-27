@@ -18,5 +18,5 @@ Read the contract at the top of `server/games/index.js`, then add `server/games/
 ## Running and testing
 
 - `npm run dev`, then open `/tv` and `/` (as the controller) in separate browser profiles; the keyboard works as a controller.
-- `npm run check` runs the smoke test (`scripts/smoke.mjs`): it starts the server and checks pages, join info, WebSockets, a game round and the port fallback. CI runs it on Linux, macOS and Windows. `node scripts/smoke.mjs --cmd <binary>` tests a release build.
+- `npm run check` runs the unit tests in `test/` (`npm test`) and the smoke test (`scripts/smoke.mjs`): it starts the server and checks pages, join info, WebSockets, a game round and the port fallback. CI runs it on Linux, macOS and Windows. `node scripts/smoke.mjs --cmd <binary>` tests a release build.
 - After changes, check: the lobby shows the game, the host can start, rounds play, results show, and it returns to the lobby. Also check that only the host and the TV can `select`, `start` or `end`.

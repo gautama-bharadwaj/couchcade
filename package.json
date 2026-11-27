@@ -29,7 +29,8 @@
     "start": "node bin/couchcade.js",
     "dev": "node --watch server/index.js",
     "build:release": "node scripts/build-release.mjs",
-    "check": "node scripts/smoke.mjs"
+    "test": "node --test test/tidewake-trail.test.mjs",
+    "check": "npm test && node scripts/smoke.mjs"
   },
   "engines": {
     "node": ">=20"

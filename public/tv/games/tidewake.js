@@ -786,7 +786,7 @@ function drawPanel(ctx, s, now, crestOf) {
   if (y + 50 < costTop) {
     const ex = s.players.find((p) => p.id === s.explorer);
     const tr = s.players.find((p) => p.id === s.trader);
-    text(ctx, `Explorer +2: ${ex ? ex.name : 'most tiles reached, 7+'}`, PANEL_X, y + 20, { size: 17, weight: 700, align: 'left', color: '#c3c9d6' });
+    text(ctx, `Explorer +2: ${ex ? ex.name : 'longest trail, 5+'}`, PANEL_X, y + 20, { size: 17, weight: 700, align: 'left', color: '#c3c9d6' });
     text(ctx, `Trader +1: ${tr ? tr.name : 'most deals, 3+'}`, PANEL_X, y + 44, { size: 17, weight: 700, align: 'left', color: '#c3c9d6' });
     y += 62;
   }
