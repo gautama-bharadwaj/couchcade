@@ -164,6 +164,20 @@
     #screen .dialLabels .l { color: #7cc7e8; }
     #screen .dialLabels .r { color: #f0a070; text-align: right; }
     #screenFooter { min-height: 1.2em; }
+    /* Your-turn countdown (screen.timer): stays pinned at the top while the screen scrolls, and
+       turns amber, then red and pulsing, as time runs out. */
+    #screenTimer { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; margin-bottom: -4px; padding: 8px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); font-weight: 800; font-variant-numeric: tabular-nums; }
+    #screenTimer[hidden] { display: none; }
+    #screenTimer .bar { flex: 1; height: 8px; border-radius: 4px; background: #232a3b; overflow: hidden; }
+    #screenTimer .bar i { display: block; height: 100%; width: 100%; border-radius: 4px; background: #7cc7e8; transform-origin: left; transition: transform 1s linear, background-color .3s; }
+    #screenTimer .t { min-width: 3.2em; text-align: right; font-size: 1.15rem; }
+    #screenTimer .msg { display: none; }
+    #screenTimer.warn { border-color: #ffb020; color: #ffc24d; }
+    #screenTimer.warn .bar i { background: #ffb020; }
+    #screenTimer.warn .msg, #screenTimer.urgent .msg { display: inline; }
+    #screenTimer.urgent { border-color: #ff4d4d; background: #3a1418; color: #ff8080; animation: timerPulse .5s ease-in-out infinite alternate; }
+    #screenTimer.urgent .bar i { background: #ff4d4d; }
+    @keyframes timerPulse { to { transform: scale(1.04); box-shadow: 0 0 18px #ff4d4d88; } }
     body.screens #hud { display: flex; }
 
     /* How to play: the step the TV is showing (host can step or skip), and a sheet with every step
@@ -241,6 +255,7 @@
   </section>
 
   <section id="screen" class="screen">
+    <div id="screenTimer" hidden><span class="msg">Hurry!</span><div class="bar"><i></i></div><span class="t"></span></div>
     <div id="screenBody"></div>
     <div id="screenFooter" class="muted"></div>
   </section>

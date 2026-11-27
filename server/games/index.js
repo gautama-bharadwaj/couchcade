@@ -86,6 +86,8 @@
 //     },                                   // (drawn after input, before the wheel)
 //     actions: [{ key: 'ready', label: 'Ready', style?: 'primary' | 'secondary', disabled? }], // sends { key }
 //     footer: 'Waiting for 3 more…',       // small muted text
+//     timer: { left: 12, limit: 60 },       // your-turn countdown pinned at the top; turns amber, then
+//                                          // red and pulsing (with a buzz) as it runs out
 //     art: 'tidewake',                     // drawn art for this screen (see below)
 //   }
 //

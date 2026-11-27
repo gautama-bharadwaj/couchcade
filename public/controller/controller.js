@@ -380,6 +380,31 @@ function iconStrip(art, names, size = 22, color) {
   if (!art?.drawNamed || !names?.length) return null;
   return artCanvas(names.length * (size + 4), size + 2, (g) => names.forEach((n, i) => art.drawNamed(g, n, size / 2 + 1 + i * (size + 4), size / 2 + 1, size, color)), 'art strip');
 }
+// The your-turn countdown (screen.timer = { left, limit }). It updates in place every second like the
+// footer, warns in the last quarter (5–15 s), and goes red and pulses in the last 5 s, with a buzz
+// at each step on phones that can vibrate.
+let timerState = '';
+function renderTimer(t) {
+  const box = $('screenTimer');
+  if (!t || !(t.limit > 0)) {
+    box.hidden = true;
+    timerState = '';
+    return;
+  }
+  const left = Math.max(0, Math.ceil(t.left));
+  const warnAt = Math.max(5, Math.min(15, Math.round(t.limit / 4)));
+  const state = left <= 5 ? 'urgent' : left <= warnAt ? 'warn' : 'ok';
+  if (state !== timerState && timerState) {
+    if (state === 'warn') navigator.vibrate?.([60, 80, 60]);
+    if (state === 'urgent') navigator.vibrate?.([120, 80, 120, 80, 120]);
+  }
+  timerState = state;
+  box.hidden = false;
+  box.className = state === 'ok' ? '' : state;
+  box.querySelector('.t').textContent = left >= 60 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : `${left}s`;
+  box.querySelector('.bar i').style.transform = `scaleX(${Math.min(1, left / t.limit)})`;
+}
+
 let dialDragging = false;
 let pendingScreen;
 let lastTitle = null;
@@ -387,12 +412,13 @@ function renderScreen(screen) {
   // The footer (often a countdown) updates in place, so ticking timers don't rebuild the
   // buttons under someone's thumb.
   $('screenFooter').textContent = screen?.footer ?? '';
-  const json = JSON.stringify(screen ? { ...screen, footer: undefined } : null);
+  renderTimer(screen?.timer);
+  const json = JSON.stringify(screen ? { ...screen, footer: undefined, timer: undefined } : null);
   currentScreen = screen;
   if (json === lastScreen) return;
   // A dial that's the only thing that changed (someone else moved, or the server echoed our own
   // needle) is redrawn in place, so a drag in progress isn't interrupted.
-  const rest = JSON.stringify(screen ? { ...screen, footer: undefined, dial: screen.dial ? { ...screen.dial, value: 0, crowd: 0, pins: 0 } : undefined } : null);
+  const rest = JSON.stringify(screen ? { ...screen, footer: undefined, timer: undefined, dial: screen.dial ? { ...screen.dial, value: 0, crowd: 0, pins: 0 } : undefined } : null);
   if (screen?.dial && dialUpdate && rest === lastRest) {
     lastScreen = json;
     return dialUpdate(screen.dial);
