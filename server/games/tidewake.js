@@ -18,7 +18,8 @@
 //   • Trade: offer any cards to the table for any cards; others accept, decline or counter, and
 //     you pick who to deal with. Or trade with the bank at 4:1, or better at a harbor (3:1 any,
 //     2:1 one resource) where you have a building.
-//   • Awards: Explorer (2 points) for trails touching the most tiles, at least 7.
+//   • Awards: Explorer (2 points) for the longest single connected Trail, at least 5 long.
+//     Another player's building cuts a trail. Ties keep the current Explorer.
 //     Trader (1 point) for the most deals done with other players, at least 3.
 //   • First to 8 points on their own turn wins (Treasure bottles count, but stay secret till then).
 // Bots (lobby "Add bot") place, build, bank-trade, offer simple deals and answer offers.
@@ -56,7 +57,7 @@ const BOTTLES = {
   monkey: { name: 'Monkey Business', icon: '🐒', text: 'Name a resource. Every other player hands you 1 of it, if they have any.', count: 3 },
 };
 
-const EXPLORER_MIN = 7;
+const EXPLORER_MIN = 5;
 const TRADER_MIN = 3;
 
 const SETUP_SECONDS = 60;
@@ -82,7 +83,7 @@ export default {
     { title: 'Build on your phone', art: 'build', text: 'Tap a glowing spot on your phone’s map, then confirm. Huts must touch your Trail and can’t sit right next to another Hut.' },
     { title: 'Trade out loud', art: 'trade', text: 'Offer any cards to the table. Others accept, pass or counter, and you pick the deal. Or trade with the bank at 4 for 1, better at a harbor.' },
     { title: 'Seven erupts the volcano', art: 'erupt', text: 'Anyone holding more than 7 cards loses half. The roller drifts the Ash Cloud onto a tile and steals a card from someone there.' },
-    { title: 'Bottles and awards', art: 'bottles', text: 'Buy a Message in a Bottle for a surprise. Explorer is worth 2 points for the longest reach, Trader 1 point for the most deals.' },
+    { title: 'Bottles and awards', art: 'bottles', text: 'Buy a Message in a Bottle for a surprise. Explorer is worth 2 points for the longest unbroken Trail, Trader 1 point for the most deals.' },
   ],
 
   create({ players }) {
@@ -198,20 +199,16 @@ export default {
       [...new Set(tiles[st.ash].v.map((v) => verts[v].owner).filter((o) => o && o !== id && count(P.get(o).hand) > 0))];
 
     // ---- Awards ----------------------------------------------------------------------
-    function explorerReach(id) {
-      const set = new Set();
-      for (const e of edges) if (e.owner === id) for (const t of e.tiles) set.add(t);
-      return set.size;
-    }
     function checkAwards() {
-      const holderReach = st.explorer ? explorerReach(st.explorer) : 0;
-      for (const id of order) {
-        const r = explorerReach(id);
-        if (id !== st.explorer && r >= EXPLORER_MIN && r > holderReach) {
-          st.explorer = id;
-          say(`${name(id)} is now the Explorer (+2)`);
-          fx('award', { by: id, award: 'explorer' });
-          break;
+      const holder = st.explorer;
+      const next = nextExplorer(holder, new Map(order.map((id) => [id, longestTrail(board, id)])));
+      if (next !== holder) {
+        st.explorer = next;
+        if (next) {
+          say(`${name(next)} is now the Explorer (+2)`);
+          fx('award', { by: next, award: 'explorer' });
+        } else {
+          say(`${name(holder)} is no longer the Explorer`);
         }
       }
       const holderDeals = st.trader ? P.get(st.trader).deals : 0;
@@ -946,7 +943,7 @@ export default {
           'Then trade and build as much as you like, and end your turn.',
           'A 7 erupts the volcano: anyone holding more than 7 cards loses half, and the roller drifts the Ash Cloud onto a tile (it grows nothing) and steals a card from someone there.',
           'Huts can’t sit right next to another Hut, and must touch one of your Trails.',
-          `Awards: Explorer (+2) for trails touching the most tiles (at least ${EXPLORER_MIN}). Trader (+1) for the most deals with other players (at least ${TRADER_MIN}).`,
+          `Awards: Explorer (+2) for the longest unbroken Trail (at least ${EXPLORER_MIN}; another player’s building cuts it). Trader (+1) for the most deals with other players (at least ${TRADER_MIN}).`,
           'Harbors on the coast let you trade with the bank at 3:1 or 2:1 instead of 4:1.',
         ];
         for (const w of ['trail', 'hut', 'light', 'bottle']) s.cards.push({ label: BUILD[w].name, art: w, artColor: color(id), icons: costList(w), sub: BUILD_TEXT[w] });
@@ -1245,7 +1242,7 @@ export default {
             return {
               id, name: name(id), color: color(id), connected: players.get(id)?.connected ?? false,
               vp: st.phase === 'end' ? vp(id) : publicVp(id), cards: count(p.hand), bottles: p.bottles.length,
-              huts: p.huts, lights: p.lights, trails: p.trails, deals: p.deals, reach: explorerReach(id),
+              huts: p.huts, lights: p.lights, trails: p.trails, deals: p.deals, longest: longestTrail(board, id),
             };
           }),
         };
@@ -1278,6 +1275,38 @@ const BUILD_TEXT = {
   light: '2 points. Upgrades one of your Huts; it harvests 2 instead of 1.',
   bottle: 'A random Message in a Bottle card. Open it on a later turn.',
 };
+
+// ---- Longest trail -------------------------------------------------------------------
+// The most of a player's Trails you can walk in one go without using a Trail twice. Corners can be
+// revisited (loops count), but you can't walk through a corner holding someone else's building.
+export function longestTrail({ verts, edges }, id) {
+  const mine = edges.filter((e) => e.owner === id);
+  const blocked = (v) => verts[v].owner && verts[v].owner !== id;
+  const used = new Set();
+  let best = 0;
+  const walk = (v, len) => {
+    best = Math.max(best, len);
+    if (len > 0 && blocked(v)) return;
+    for (const e of verts[v].edges) {
+      if (edges[e].owner !== id || used.has(e)) continue;
+      used.add(e);
+      walk(edges[e].v[0] === v ? edges[e].v[1] : edges[e].v[0], len + 1);
+      used.delete(e);
+    }
+  };
+  for (const e of mine) for (const v of e.v) walk(v, 0);
+  return best;
+}
+
+// Who holds Explorer, given each player's longest trail. The holder keeps it on a tie; if their
+// trail is cut and someone else is now strictly longest, it moves; if nobody leads alone, nobody
+// holds it.
+export function nextExplorer(holder, lengths) {
+  const best = Math.max(0, ...lengths.values());
+  if (holder && lengths.get(holder) >= EXPLORER_MIN && lengths.get(holder) === best) return holder;
+  const leaders = [...lengths.keys()].filter((id) => lengths.get(id) === best);
+  return best >= EXPLORER_MIN && leaders.length === 1 ? leaders[0] : null;
+}
 
 // ---- Island generation ------------------------------------------------------------------
 // Pointy-top hexes of radius 1 laid out in centred rows. Vertices and edges are found by

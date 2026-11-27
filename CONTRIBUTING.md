@@ -62,6 +62,7 @@ public/
 scripts/
   smoke.mjs             npm run check: starts the server and tests it from outside
   build-release.mjs     npm run build:release: the downloadable apps (see Releasing)
+test/                   npm test: unit tests (node:test), run first by npm run check
 docs/screenshots/       images for the README
 ```
 
@@ -82,7 +83,7 @@ Before opening a pull request, check that the lobby shows the game, the host can
 
 ## Testing
 
-`npm run check` runs the smoke test (`scripts/smoke.mjs`): it starts the server for real and checks the pages, join info, WebSockets, a game round, the how-to-play intro and the port fallback. CI runs it on Linux, macOS and Windows with Node 20 and the Node the downloads embed, plus a Linux release build. `node scripts/smoke.mjs --cmd <binary>` tests a release build.
+`npm run check` runs the unit tests in `test/` (`npm test`), then the smoke test (`scripts/smoke.mjs`): it starts the server for real and checks the pages, join info, WebSockets, a game round, the how-to-play intro and the port fallback. CI runs it on Linux, macOS and Windows with Node 20 and the Node the downloads embed, plus a Linux release build. `node scripts/smoke.mjs --cmd <binary>` tests a release build.
 
 Action games need a feel check on real phones too: the browser keyboard hides latency and how a joystick feels under your thumb.
 
