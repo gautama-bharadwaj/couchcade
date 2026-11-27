@@ -64,6 +64,9 @@ const SETUP_SECONDS = 60;
 const ROLL_SECONDS = 20;
 const TURN_SECONDS = 150;
 const CHOICE_SECONDS = 25;
+// Drifting the Ash Cloud means reading the whole map, and the clock starts while the eruption is
+// still being shown and narrated, so it gets as long as a setup placement.
+const ASH_SECONDS = 60;
 const AWAY_SECONDS = 5;
 const END_SECONDS = 10;
 
@@ -323,7 +326,7 @@ export default {
         say(`${name(id)} rolled 7. The volcano erupts!`);
         st.phase = 'ash';
         st.mode = null;
-        st.left = CHOICE_SECONDS;
+        st.left = ASH_SECONDS;
         st.afterAsh = 'main';
         botNext(1.5, 2.5);
         return;
@@ -593,7 +596,7 @@ export default {
             st.turnLeft = st.left;
             st.phase = 'ash';
             st.afterAsh = 'main';
-            st.left = CHOICE_SECONDS;
+            st.left = ASH_SECONDS;
             st.mode = null;
             return;
           }
@@ -650,6 +653,10 @@ export default {
     }
 
     // ---- Auto moves (timeouts, away players) ---------------------------------------------------
+    function limit() {
+      const p = st.phase;
+      return p === 'setup' ? SETUP_SECONDS : p === 'roll' ? ROLL_SECONDS : p === 'main' ? TURN_SECONDS : p === 'end' ? END_SECONDS : p === 'ash' ? ASH_SECONDS : CHOICE_SECONDS;
+    }
     function autoMove() {
       const id = current();
       if (st.phase === 'setup') {
@@ -919,7 +926,7 @@ export default {
     const icons = (h) => RES.flatMap((r) => Array(Math.min(h[r] || 0, 8)).fill(r));
     const costList = (w) => Object.entries(COST[w]).flatMap(([r, k]) => Array(k).fill(r));
     const short = (id, w) => words(Object.fromEntries(RES.map((r) => [r, Math.max(0, (COST[w][r] || 0) - P.get(id).hand[r])])));
-    const timer = () => `${Math.max(0, st.left)}s`;
+    const timer = () => ({ left: Math.max(0, st.left), limit: limit() });
 
     function screenFor(id) {
       const p = P.get(id);
@@ -971,7 +978,7 @@ export default {
             { key: 'sendCounter', label: 'Send counter-offer', style: 'primary', disabled: !count(draft.give) || !count(draft.want) || !canGive(id, draft.give) },
             { key: 'cancelCounter', label: 'Back', style: 'secondary' },
           ];
-          s.footer = timer();
+          s.timer = timer();
           return s;
         }
         const reply = of.replies.get(id);
@@ -1001,7 +1008,7 @@ export default {
       }
 
       // ---- My turn ----
-      s.footer = timer();
+      s.timer = timer();
       if (st.phase === 'setup') {
         const what = st.step;
         const list = spots(id, what);
@@ -1214,7 +1221,7 @@ export default {
           step: st.step,
           turn: st.phase === 'end' ? null : current(),
           left: st.left,
-          limit: st.phase === 'setup' ? SETUP_SECONDS : st.phase === 'roll' ? ROLL_SECONDS : st.phase === 'main' ? TURN_SECONDS : st.phase === 'end' ? END_SECONDS : CHOICE_SECONDS,
+          limit: limit(),
           goal: GOAL,
           // Full rounds played since setup; the TV turns day into dusk and night with it.
           round: Math.max(0, Math.floor((st.turnNo - 1) / order.length)),
