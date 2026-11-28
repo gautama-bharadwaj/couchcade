@@ -63,7 +63,8 @@
 //     },
 //     hexmap: {                            // a hex board; tap a glowing spot, sends { key, value: spot.id }
 //       key: 'spot',                       // pointy-top hexes of radius 1, in map units (any origin)
-//       tiles: [{ x, y, color, label?, num?, hot?, dim? }],   // num = a number token, hot = red number
+//       tiles: [{ x, y, color, label?, num?, hot?, dots?, dim? }],   // num = a number token, hot = red number,
+//                                                       // dots = little dots under the number (0–5)
 //       roads: [{ x1, y1, x2, y2, color }], buildings: [{ x, y, color, kind: 'hut' | 'tower' }],
 //       harbors?: [{ x, y, label }],
 //       spots: [{ id, x, y, x1?, y1?, x2?, y2?, tile? }],     // a corner; an edge (with ends); or a whole tile
