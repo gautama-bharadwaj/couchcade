@@ -50,7 +50,7 @@ A color-clue game around a big color wheel. The Teller picks a secret swatch and
 </p>
 
 #### Dragon Hoard · 4–8 players in two teams, or 2–3 co-op
-A team word-clue game. 25 words on the TV each hide an Ember gem, a Frost gem, dust or the sleeping dragon. Each team's Keeper sees the key on their phone and gives one word and a number ("ocean 3"); teammates talk it over and vote on their phones. Find all your gems first, and don't wake the dragon. 621 words.
+A team word-clue game. 25 words on the TV each hide an Ember gem, a Frost gem, dust or the sleeping dragon. Each team's Keeper sees the key on their phone and gives one word and a number ("ocean 3"); teammates talk it over and vote on their phones. Find all your gems first, and don't wake the dragon. 1,628 words, and no word comes back until the whole list has been dealt.
 
 <p>
   <img src="docs/screenshots/hoard-tv.webp" alt="Dragon Hoard on the TV" width="560">
