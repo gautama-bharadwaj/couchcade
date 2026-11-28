@@ -36,6 +36,18 @@ const MAX_NUMBER = 9;
 // Who has been Keeper lately, so it rotates between games (player ids last while they keep their seat).
 const keeperTimes = new Map();
 
+// Words are dealt from one shuffled pile for as long as the server runs, so a group playing several
+// games in an evening doesn't see a word again until the whole list has gone round.
+let pile = [];
+export function drawWords(n) {
+  const out = [];
+  while (out.length < n) {
+    if (!pile.length) pile = shuffle(WORDS.filter((w) => !out.includes(w)));
+    out.push(pile.pop());
+  }
+  return out;
+}
+
 export default {
   id: 'hoard',
   title: 'Dragon Hoard',
@@ -87,9 +99,7 @@ export default {
     // ---- Board ----------------------------------------------------------------------
     const owners = coop ? [...rep('ember', 9), ...rep('dust', 15), 'dragon'] : [...rep(order[0], 9), ...rep(order[1], 8), ...rep('dust', 7), 'dragon'];
     const tiles = shuffle(owners).map((owner, i) => ({ word: null, owner, revealed: false, by: null, i }));
-    shuffle([...WORDS])
-      .slice(0, tiles.length)
-      .forEach((w, i) => (tiles[i].word = w));
+    drawWords(tiles.length).forEach((w, i) => (tiles[i].word = w));
     for (const t of teams) t.total = tiles.filter((x) => x.owner === t.key).length;
 
     let clock = 0;
