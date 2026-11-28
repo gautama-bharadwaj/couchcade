@@ -1,6 +1,11 @@
 // Tidewake TV: the island on the left (illustrated tiles that move a little, number tokens, harbor
-// boats, everyone's trails, huts and lighthouses, the Ash Cloud), the crews on the right with their
-// crests, points and cards, and the dice on the sea. Hands stay on the phones. Rules are in
+// boats, everyone's trails, huts and lighthouses, the Ash Cloud), whose turn it is and the crews on
+// the right with their crests, points and cards, the dice on the sea in the top-left corner and the
+// building costs in the bottom-left one. Hands stay on the phones.
+//
+// The island is as tall as the screen allows (it is about as wide as it is tall, so height is
+// the limit on a 16:9 TV), and the number tokens are big, so the numbers and their dots read from
+// the couch even with the 30-tile island for 5–6 players. Rules are in
 // server/games/tidewake.js; all drawing of tiles and pieces is in public/art/tidewake.js.
 //
 // Things that happen get a little show: harvested resources fly from the tiles to their owner's row,
@@ -16,13 +21,19 @@ import {
 
 const ORDER = ['wood', 'coco', 'fish', 'shell', 'stone'];
 const COSTS = [
-  ['trail', 'Trail', ['wood', 'coco']],
-  ['hut', 'Hut · 1 pt', ['wood', 'coco', 'fish', 'shell']],
-  ['light', 'Lighthouse · 2 pts', ['stone', 'stone', 'stone', 'shell', 'shell']],
-  ['bottle', 'Bottle', ['fish', 'shell', 'stone']],
+  ['trail', 'Trail', '', ['wood', 'coco']],
+  ['hut', 'Hut', '+1', ['wood', 'coco', 'fish', 'shell']],
+  ['light', 'Lighthouse', '+2', ['stone', 'stone', 'stone', 'shell', 'shell']],
+  ['bottle', 'Bottle', '', ['fish', 'shell', 'stone']],
 ];
-const BOARD = { x: 60, y: 100, w: 1080, h: 760 };
+// The island's box. Its corners stay free (the island is round-ish): dice top-left, costs bottom-left.
+const BOARD = { x: 40, y: 36, w: 1100, h: 828 };
 const PANEL_X = 1170;
+const HARBOR_OUT = 0.4; // boats sit this far off the coast (the server's spot is 0.55; closer = bigger island)
+const SIGN = 1.35; // harbor signs, relative to the boat
+// Corner widgets on the sea, kept clear of tiles and boats: [x1, y1, x2, y2].
+const DICE_BOX = [40, 36, 330, 150];
+const COST_BOX = [40, 700, 340, 864];
 const SERIF = 'Georgia, "Times New Roman", serif';
 const NIGHT = [0, 0.35, 0.85, 0.35]; // darkness by round, repeating: day, dusk, night, dawn
 
@@ -43,24 +54,77 @@ let dark = 0;
 let lastNow = 0;
 let tileCache = null; // { key, canvas }
 
-const rowH = (n) => (n <= 4 ? 104 : n === 5 ? 88 : 78);
-const rowY = (n, i) => 104 + i * rowH(n);
+const ROWS_TOP = 150; // under the turn card at the top of the panel
+const rowH = (n) => (n <= 4 ? 104 : n === 5 ? 92 : 80);
+const rowY = (n, i) => ROWS_TOP + i * rowH(n);
 // Where harvested tokens land: the right end of the row's card line.
-const rowTarget = (n, i) => [PANEL_X + 300, rowY(n, i) + (n <= 4 ? 76 : 60)];
+const rowTarget = (n, i) => [PANEL_X + 300, rowY(n, i) + (rowH(n) >= 100 ? 76 : 60)];
 const EMOJI = { '🪵': 'wood', '🥥': 'coco', '🐟': 'fish', '🐚': 'shell', '🪨': 'stone' };
 const pips = (n) => (n ? 6 - Math.abs(7 - n) : 0);
 const ease = (q) => 1 - (1 - q) ** 3;
 const clamp01 = (q) => Math.max(0, Math.min(1, q));
 
+/**
+ * Tile units to screen. The island is centred on the origin; the scale is the largest that fits
+ * the tiles and the harbor boats (mast above, sign below) in BOARD, measured both ways from the
+ * centre so the box's corners stay free.
+ */
+let layoutCache = null;
 function layout(s) {
-  const xs = s.tiles.map((t) => t.x);
-  const ys = s.tiles.map((t) => t.y);
-  const w = Math.max(...xs) - Math.min(...xs) + 3.4;
-  const h = Math.max(...ys) - Math.min(...ys) + 3.4;
-  const k = Math.min(BOARD.w / w, BOARD.h / h);
-  const cx = BOARD.x + BOARD.w / 2;
-  const cy = BOARD.y + BOARD.h / 2;
-  return { k, X: (x) => cx + x * k, Y: (y) => cy + y * k };
+  const key = s.tiles.length + ':' + s.harbors.map((h) => h.e).join(',');
+  if (layoutCache?.key !== key) {
+    let ex = 0;
+    let ey = 0;
+    for (const t of s.tiles) {
+      ex = Math.max(ex, Math.abs(t.x) + 0.87);
+      ey = Math.max(ey, Math.abs(t.y) + 1);
+    }
+    const boats = s.harbors.map((h) => harborSpot(s, h));
+    for (const [x, y] of boats) {
+      ex = Math.max(ex, Math.abs(x) + 0.42);
+      ey = Math.max(ey, -(y - 0.15 - 0.42 * 0.9), y - 0.15 + 0.42 * (0.5 + 0.55 * SIGN) + 0.04);
+    }
+    // Largest scale that fits. If a tile or boat runs into a corner widget, first slide the island
+    // right into any spare width, then make it a little smaller.
+    const cy = BOARD.y + BOARD.h / 2;
+    let cx = BOARD.x + BOARD.w / 2;
+    const hits = (k, [x1, y1, x2, y2]) =>
+      s.tiles.some((t) => {
+        const px = cx + t.x * k;
+        const py = cy + t.y * k;
+        return Math.hypot(Math.max(x1 - px, 0, px - x2), Math.max(y1 - py, 0, py - y2)) < k * 0.92;
+      }) ||
+      boats.some(([x, y]) => {
+        const px = cx + x * k;
+        const py = cy + y * k;
+        return px + k * 0.4 > x1 && px - k * 0.4 < x2 && py + k * 0.42 > y1 && py - k * 0.55 < y2;
+      });
+    const most = Math.min(BOARD.w / (2 * ex), BOARD.h / (2 * ey));
+    const mid = BOARD.x + BOARD.w / 2;
+    let k = most;
+    for (; k > most * 0.8; k *= 0.98) {
+      const slack = BOARD.w / 2 - ex * k;
+      let dx = 0;
+      for (; dx <= slack; dx += 8) {
+        cx = mid + dx;
+        if (!hits(k, DICE_BOX) && !hits(k, COST_BOX)) break;
+      }
+      if (dx <= slack) break;
+    }
+    if (k <= most * 0.8) cx = mid;
+    layoutCache = { key, k, boats, cx, cy };
+  }
+  const { k, boats, cx, cy } = layoutCache;
+  return { k, boats, X: (x) => cx + x * k, Y: (y) => cy + y * k };
+}
+
+/** A harbor boat's spot in tile units: off the middle of its coast edge, a little closer in than the server's. */
+function harborSpot(s, h) {
+  const [a, b] = s.edges[h.e];
+  const mx = (s.verts[a][0] + s.verts[b][0]) / 2;
+  const my = (s.verts[a][1] + s.verts[b][1]) / 2;
+  const d = Math.hypot(h.x - mx, h.y - my) || 1;
+  return [mx + ((h.x - mx) / d) * HARBOR_OUT, my + ((h.y - my) / d) * HARBOR_OUT];
 }
 
 const vxy = (s, L, v) => [L.X(s.verts[v][0]), L.Y(s.verts[v][1])];
@@ -132,31 +196,35 @@ function tileLayer(ctx, s, L) {
   return c;
 }
 
+/**
+ * A number token: a bright disc with a dark rim, a bold number and its dots (how many ways two dice
+ * make it). Sized to read from across the room: big digits, dots a good size, strong contrast.
+ */
 function numberToken(ctx, x, y, r, num) {
-  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath();
-  ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2);
+  ctx.arc(x + r * 0.06, y + r * 0.1, r, 0, Math.PI * 2);
   ctx.fill();
-  const tg = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, 1, x, y, r);
-  tg.addColorStop(0, '#fffaf0');
-  tg.addColorStop(1, '#e8dcbc');
+  const tg = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, 1, x, y, r);
+  tg.addColorStop(0, '#fffdf6');
+  tg.addColorStop(1, '#f1e6c8');
   ctx.fillStyle = tg;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = '#8a6a3c';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#3b2812';
+  ctx.lineWidth = Math.max(2, r * 0.1);
   ctx.stroke();
   const hot = num === 6 || num === 8;
-  ctx.fillStyle = hot ? '#c8261f' : '#2a1d10';
-  ctx.font = `900 ${Math.round(r * 1.1)}px ${SERIF}`;
+  ctx.fillStyle = hot ? '#c41a12' : '#1a1209';
+  ctx.font = `900 ${Math.round(r * (hot ? 1.12 : 1.04))}px ${SERIF}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(String(num), x, y - r * 0.08);
+  ctx.fillText(String(num), x, y - r * 0.14);
   const dots = pips(num);
   for (let d = 0; d < dots; d++) {
     ctx.beginPath();
-    ctx.arc(x + (d - (dots - 1) / 2) * r * 0.24, y + r * 0.56, r * 0.075, 0, Math.PI * 2);
+    ctx.arc(x + (d - (dots - 1) / 2) * r * 0.29, y + r * 0.6, r * 0.12, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -395,7 +463,7 @@ export default {
     const heat = clamp01(1 - (now - eruptAt) / 5000);
 
     // Sea.
-    const sea = ctx.createRadialGradient(600, 470, 100, 600, 470, 950);
+    const sea = ctx.createRadialGradient(590, 450, 100, 590, 450, 950);
     sea.addColorStop(0, '#2a8fb8');
     sea.addColorStop(1, '#0b2d48');
     ctx.fillStyle = sea;
@@ -452,7 +520,11 @@ export default {
         ctx.fill();
       });
     }
-    for (const tl of s.tiles) if (tl.num) numberToken(ctx, X(tl.x), Y(tl.y) + k * 0.36, k * 0.27, tl.num);
+    // Number tokens go above the night shade so they stay bright; the one under the Ash Cloud goes below it.
+    const tokens = (ash) => s.tiles.forEach((tl, i) => {
+      if (tl.num && (i === s.ash) === ash) numberToken(ctx, X(tl.x), Y(tl.y) + k * 0.17, k * 0.4, tl.num);
+    });
+    tokens(true);
 
     // Ash Cloud (drifting when it moves), smoke from the volcanoes.
     {
@@ -485,19 +557,22 @@ export default {
       }
     }
 
+    tokens(false);
+
     // Harbors: a jetty to both corners and a boat with its rate.
-    for (const h of s.harbors) {
+    s.harbors.forEach((h, i) => {
       const [a, b] = s.edges[h.e];
+      const [hx, hy] = L.boats[i];
       ctx.strokeStyle = '#8a6a44';
       ctx.lineWidth = Math.max(3, k * 0.06);
       for (const v of [a, b]) {
         ctx.beginPath();
-        ctx.moveTo(X(h.x), Y(h.y));
+        ctx.moveTo(X(hx), Y(hy));
         ctx.lineTo(...vxy(s, L, v));
         ctx.stroke();
       }
-      drawBoat(ctx, X(h.x), Y(h.y) - k * 0.15, k * 0.42, h.kind, t);
-    }
+      drawBoat(ctx, X(hx), Y(hy) - k * 0.15, k * 0.42, h.kind, t, SIGN);
+    });
 
     // Trails, then buildings (dropping in when new).
     for (const tr of s.trails) {
@@ -582,8 +657,9 @@ export default {
       ctx.fillRect(0, 0, W, H);
     }
 
-    drawTop(ctx, s, now, playerById, crestOf);
-    drawPanel(ctx, s, now, crestOf);
+    drawDice(ctx, s, now);
+    drawCosts(ctx, s);
+    drawPanel(ctx, s, now, playerById, crestOf);
 
     // Flying tokens and cards, over everything but the banner.
     flights = flights.filter((f) => now < f.at + f.dur);
@@ -647,63 +723,99 @@ export default {
   },
 };
 
-function drawTop(ctx, s, now, playerById, crestOf) {
+/** Whose turn and what they are doing, as two lines: the name, then the action. */
+function turnLines(s, playerById) {
   const p = playerById.get(s.turn);
-  const nm = p?.name ?? '';
-  let msg = '';
-  if (s.phase === 'setup') msg = `${nm} is placing a ${s.step === 'hut' ? 'Hut' : 'Trail'}`;
-  else if (s.phase === 'roll') msg = `${nm}'s turn · roll the dice`;
-  else if (s.phase === 'ash' || s.phase === 'steal') msg = `${nm} is drifting the Ash Cloud`;
-  else if (s.phase === 'main') {
-    const m = { build: 'is building', calm: 'is laying free Trails', trade: 'is putting together an offer', offer: 'wants to trade', bank: 'is trading with the bank', bottles: 'is opening a Bottle', current: 'rides a Lucky Current', monkey: 'is up to Monkey Business' }[s.mode];
-    msg = m ? `${nm} ${m}` : `${nm}'s turn`;
-  } else if (s.phase === 'end') msg = `${s.players.find((q) => q.id === s.winner)?.name ?? ''} rules the island!`;
-  if (msg) {
-    ctx.fillStyle = 'rgba(10,14,22,0.78)';
-    ctx.beginPath();
-    ctx.roundRect(70, 30, 720, 62, 16);
-    ctx.fill();
-    const who = p ?? playerById.get(s.winner);
-    if (who) drawCrest(ctx, 104, 56, 14, who.color, crestOf.get(who.id));
-    ctx.font = '800 30px system-ui, sans-serif';
-    let m = msg;
-    while (ctx.measureText(m).width > 630 && m.length > 4) m = m.slice(0, -2);
-    if (m !== msg) m += '…';
-    text(ctx, m, 132, 72, { size: 30, weight: 800, align: 'left' });
-    if (s.limit && s.left >= 0) {
-      const f = Math.max(0, Math.min(1, s.left / s.limit));
-      ctx.fillStyle = f < 0.2 ? '#ff5a5f' : 'rgba(255,255,255,0.45)';
-      ctx.fillRect(86, 86, 688 * f, 4);
-    }
+  if (s.phase === 'end') {
+    const w = playerById.get(s.winner);
+    return w ? [w, 'rules the island!'] : null;
   }
-  // Dice tumble onto the sea.
-  if (s.dice) {
-    const q = clamp01((now - rollAt) / 700);
-    const rolling = q < 1;
-    const [a, b] = rolling ? [1 + Math.floor((now / 70) % 6), 1 + Math.floor((now / 90 + 3) % 6)] : s.dice;
-    const spin = (1 - ease(q)) * 6;
-    const hop = rolling ? -Math.abs(Math.sin(q * Math.PI * 2.5)) * 30 * (1 - q) : 0;
-    drawDie(ctx, 870 - (1 - q) * 60, 66 + hop, 66, a, -0.25 + spin);
-    drawDie(ctx, 950 - (1 - q) * 30, 72 + hop * 0.7, 66, b, 0.18 - spin);
-    if (!rolling) {
-      const sum = s.dice[0] + s.dice[1];
-      serif(ctx, `${sum}`, 1010, 90, 46, sum === 7 ? '#ff7a5c' : '#fff');
-    }
+  if (!p) return null;
+  if (s.phase === 'setup') return [p, `is placing a ${s.step === 'hut' ? 'Hut' : 'Trail'}`];
+  if (s.phase === 'roll') return [p, 'rolls the dice'];
+  if (s.phase === 'ash' || s.phase === 'steal') return [p, 'is drifting the Ash Cloud'];
+  const m = { build: 'is building', calm: 'is laying free Trails', trade: 'is putting together an offer', offer: 'wants to trade', bank: 'is trading with the bank', bottles: 'is opening a Bottle', current: 'rides a Lucky Current', monkey: 'is up to Monkey Business' }[s.mode];
+  return [p, m ?? 'is taking their turn'];
+}
+
+/** The dice tumble onto the sea in the top-left corner, with the sum beside them. */
+function drawDice(ctx, s, now) {
+  if (!s.dice) return;
+  const q = clamp01((now - rollAt) / 700);
+  const rolling = q < 1;
+  const [a, b] = rolling ? [1 + Math.floor((now / 70) % 6), 1 + Math.floor((now / 90 + 3) % 6)] : s.dice;
+  const spin = (1 - ease(q)) * 6;
+  const hop = rolling ? -Math.abs(Math.sin(q * Math.PI * 2.5)) * 30 * (1 - q) : 0;
+  drawDie(ctx, 110 - (1 - q) * 60, 90 + hop, 74, a, -0.25 + spin);
+  drawDie(ctx, 196 - (1 - q) * 30, 98 + hop * 0.7, 74, b, 0.18 - spin);
+  if (!rolling) {
+    const sum = s.dice[0] + s.dice[1];
+    ctx.save();
+    ctx.lineWidth = 8;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(8,20,36,.75)';
+    ctx.font = `900 60px ${SERIF}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.strokeText(String(sum), 248, 122);
+    ctx.restore();
+    serif(ctx, String(sum), 248, 122, 60, sum === 7 ? '#ff7a5c' : '#fff');
   }
 }
 
-function drawPanel(ctx, s, now, crestOf) {
+/** Building costs on a card in the bottom-left corner of the sea. */
+function drawCosts(ctx, s) {
+  const [x0, y0] = [COST_BOX[0], COST_BOX[1] + 6];
+  const w = COST_BOX[2] - COST_BOX[0];
+  const rh = 33;
+  ctx.fillStyle = 'rgba(10,14,22,0.8)';
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, w, 14 + COSTS.length * rh, 18);
+  ctx.fill();
+  const pc = s.players.find((p) => p.id === s.turn)?.color ?? '#c3c9d6';
+  COSTS.forEach(([piece, label, pts, res], i) => {
+    const cy = y0 + 24 + i * rh;
+    const px = x0 + 22;
+    if (piece === 'trail') drawTrail(ctx, px - 12, cy + 8, px + 12, cy - 8, pc, 24);
+    else if (piece === 'hut') drawHut(ctx, px, cy + 2, 13, pc);
+    else if (piece === 'light') drawLighthouse(ctx, px, cy + 4, 12, pc);
+    else drawBottle(ctx, px, cy, 24);
+    text(ctx, label, x0 + 42, cy + 6, { size: 17, weight: 700, align: 'left', color: '#c3c9d6' });
+    if (pts) text(ctx, pts, x0 + 48 + ctx.measureText(label).width, cy + 6, { size: 17, weight: 900, align: 'left', color: '#ffd27a' });
+    res.forEach((r, j) => drawIcon(ctx, r, x0 + w - 18 - (res.length - 1 - j) * 24, cy, 23));
+  });
+}
+
+function drawPanel(ctx, s, now, playerById, crestOf) {
   const TOP = 30;
   const BOTTOM = 860;
   ctx.fillStyle = 'rgba(10,14,22,0.86)';
   ctx.beginPath();
   ctx.roundRect(PANEL_X - 20, TOP, 420, BOTTOM - TOP, 24);
   ctx.fill();
-  serif(ctx, 'TIDEWAKE', PANEL_X, 80, 34, '#ffd27a');
-  text(ctx, `first to ${s.goal}`, PANEL_X + 375, 78, { size: 18, weight: 600, align: 'right', color: '#8a93a8' });
+
+  // Whose turn: crest and name, the action under it, and the turn timer.
+  const turn = turnLines(s, playerById);
+  if (turn) {
+    const [p, action] = turn;
+    drawCrest(ctx, PANEL_X + 22, 70, 18, p.color, crestOf.get(p.id));
+    let nm = p.name;
+    ctx.font = '800 32px system-ui, -apple-system, sans-serif';
+    while (ctx.measureText(nm).width > 320 && nm.length > 3) nm = nm.slice(0, -2) + '…';
+    text(ctx, nm, PANEL_X + 54, 82, { size: 32, weight: 800, align: 'left' });
+    text(ctx, action, PANEL_X + 54, 114, { size: 23, weight: 700, align: 'left', color: '#c3c9d6' });
+  } else serif(ctx, 'TIDEWAKE', PANEL_X, 90, 38, '#ffd27a');
+  if (s.limit && s.left >= 0) {
+    const f = Math.max(0, Math.min(1, s.left / s.limit));
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(PANEL_X, 132, 376, 5);
+    ctx.fillStyle = f < 0.2 ? '#ff5a5f' : 'rgba(255,255,255,0.55)';
+    ctx.fillRect(PANEL_X, 132, 376 * f, 5);
+  }
+
   const n = s.players.length;
   const rh = rowH(n);
-  const big = rh > 90;
+  const big = rh >= 100;
   const of = s.offer;
   s.players.forEach((p, i) => {
     const y = rowY(n, i);
@@ -748,7 +860,6 @@ function drawPanel(ctx, s, now, crestOf) {
     }
   });
   let y = rowY(n, n) + 6;
-  const costTop = BOTTOM - 18 - COSTS.length * 38;
 
   if (of) {
     const from = s.players.find((p) => p.id === of.from);
@@ -783,36 +894,19 @@ function drawPanel(ctx, s, now, crestOf) {
     y += h + 12;
   }
 
-  if (y + 50 < costTop) {
+  if (y + 74 < BOTTOM) {
     const ex = s.players.find((p) => p.id === s.explorer);
     const tr = s.players.find((p) => p.id === s.trader);
-    text(ctx, `Explorer +2: ${ex ? ex.name : 'longest trail, 5+'}`, PANEL_X, y + 20, { size: 17, weight: 700, align: 'left', color: '#c3c9d6' });
-    text(ctx, `Trader +1: ${tr ? tr.name : 'most deals, 3+'}`, PANEL_X, y + 44, { size: 17, weight: 700, align: 'left', color: '#c3c9d6' });
-    y += 62;
+    text(ctx, `First to ${s.goal} points wins`, PANEL_X, y + 20, { size: 18, weight: 800, align: 'left', color: '#ffd27a' });
+    text(ctx, `Explorer +2: ${ex ? ex.name : 'longest trail, 5+'}`, PANEL_X, y + 44, { size: 18, weight: 700, align: 'left', color: '#c3c9d6' });
+    text(ctx, `Trader +1: ${tr ? tr.name : 'most deals, 3+'}`, PANEL_X, y + 68, { size: 18, weight: 700, align: 'left', color: '#c3c9d6' });
+    y += 84;
   }
 
   // What just happened, newest at the bottom, in whatever room is left.
-  const room = Math.floor((costTop - 12 - y) / 25);
+  const room = Math.floor((BOTTOM - 14 - y) / 26);
   const log = room > 0 ? s.log.slice(-Math.min(4, room)) : [];
-  log.forEach((line, i) => richLine(ctx, line, PANEL_X, y + 22 + i * 25, 375, `rgba(242,244,248,${0.4 + 0.6 * ((i + 1) / log.length)})`));
-
-  // Building costs with drawn pieces and resources.
-  ctx.strokeStyle = 'rgba(255,255,255,.08)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(PANEL_X, costTop - 4);
-  ctx.lineTo(PANEL_X + 376, costTop - 4);
-  ctx.stroke();
-  const pc = s.players.find((p) => p.id === s.turn)?.color ?? '#c3c9d6';
-  COSTS.forEach(([piece, label, res], i) => {
-    const cy = costTop + 22 + i * 38;
-    if (piece === 'trail') drawTrail(ctx, PANEL_X + 2, cy + 8, PANEL_X + 30, cy - 8, pc, 26);
-    else if (piece === 'hut') drawHut(ctx, PANEL_X + 16, cy + 2, 14, pc);
-    else if (piece === 'light') drawLighthouse(ctx, PANEL_X + 16, cy + 4, 13, pc);
-    else drawBottle(ctx, PANEL_X + 16, cy, 26);
-    text(ctx, label, PANEL_X + 40, cy + 7, { size: 18, weight: 700, align: 'left', color: '#9aa3b8' });
-    res.forEach((r, j) => drawIcon(ctx, r, PANEL_X + 372 - (res.length - 1 - j) * 30, cy, 25));
-  });
+  log.forEach((line, i) => richLine(ctx, line, PANEL_X, y + 24 + i * 26, 375, `rgba(242,244,248,${0.4 + 0.6 * ((i + 1) / log.length)})`));
 }
 
 /** A log line with the server's resource emoji swapped for the drawn icons, cut to maxW. */
