@@ -734,6 +734,27 @@ function buildHexmap(m, el, art) {
     }
     g.closePath();
   }
+  // A number disc; with `dots`, the number moves up and a row of dots sits under it.
+  function numberToken(x, y, r, t, ink, hotInk, weight, family) {
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fillStyle = '#fbf3df';
+    g.fill();
+    g.lineWidth = Math.max(1.5, r * 0.1);
+    g.strokeStyle = '#5a4020';
+    g.stroke();
+    const dots = Math.min(5, t.dots ?? 0);
+    g.fillStyle = t.hot ? hotInk : ink;
+    g.font = `${weight} ${Math.round(r * (dots ? 1.02 : 1.15))}px ${family}`;
+    g.fillText(String(t.num), x, y + 1 - (dots ? r * 0.2 : 0));
+    const dr = Math.max(1.3, r * 0.12);
+    const step = Math.max(dr * 2.4, r * 0.29);
+    for (let d = 0; d < dots; d++) {
+      g.beginPath();
+      g.arc(x + (d - (dots - 1) / 2) * step, y + r * 0.58, dr, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
   function draw() {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = '#123b5c';
@@ -752,19 +773,7 @@ function buildHexmap(m, el, art) {
     if (pics) {
       g.drawImage(tileLayer, 0, 0, W, H);
       for (const t of tiles) {
-        if (t.num) {
-          const ty = Y(t.y) + k * 0.36;
-          g.beginPath();
-          g.arc(X(t.x), ty, k * 0.27, 0, Math.PI * 2);
-          g.fillStyle = '#f6ecd2';
-          g.fill();
-          g.lineWidth = 1.5;
-          g.strokeStyle = '#8a6a3c';
-          g.stroke();
-          g.fillStyle = t.hot ? '#c8261f' : '#2a1d10';
-          g.font = `900 ${Math.round(k * 0.32)}px Georgia, serif`;
-          g.fillText(String(t.num), X(t.x), ty + 1);
-        }
+        if (t.num) numberToken(X(t.x), Y(t.y) + k * 0.3, k * 0.34, t, '#2a1d10', '#c8261f', '900', 'Georgia, serif');
         if (t.dim) {
           if (art.mapCover) art.mapCover(g, X(t.x), Y(t.y), k);
           else {
@@ -783,15 +792,7 @@ function buildHexmap(m, el, art) {
       g.globalAlpha = t.num ? 0.9 : 1;
       g.fillText(t.label ?? '', X(t.x), Y(t.y) - (t.num ? k * 0.28 : 0));
       g.globalAlpha = 1;
-      if (t.num) {
-        g.beginPath();
-        g.arc(X(t.x), Y(t.y) + k * 0.25, k * 0.26, 0, Math.PI * 2);
-        g.fillStyle = '#f4ead2';
-        g.fill();
-        g.fillStyle = t.hot ? '#d6302a' : '#1b1f2a';
-        g.font = font(k * 0.3);
-        g.fillText(String(t.num), X(t.x), Y(t.y) + k * 0.26);
-      }
+      if (t.num) numberToken(X(t.x), Y(t.y) + k * 0.25, k * 0.3, t, '#1b1f2a', '#d6302a', '800', 'system-ui, sans-serif');
       if (t.dim) {
         hex(t.x, t.y, 0.98);
         g.fillStyle = 'rgba(40,40,48,.72)';

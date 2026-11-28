@@ -900,7 +900,7 @@ export default {
       // pick = { kind: 'vertex'|'edge'|'tile', list: [ids], sel }
       const m = {
         key: 'spot',
-        tiles: tiles.map((t) => ({ x: r2(t.x), y: r2(t.y), color: t.res ? RINFO[t.res].tileColor : '#4a2a26', label: t.res ? RINFO[t.res].icon : '🌋', art: t.res ?? 'volcano', num: t.num || null, hot: t.num === 6 || t.num === 8, dim: t.id === st.ash })),
+        tiles: tiles.map((t) => ({ x: r2(t.x), y: r2(t.y), color: t.res ? RINFO[t.res].tileColor : '#4a2a26', label: t.res ? RINFO[t.res].icon : '🌋', art: t.res ?? 'volcano', num: t.num || null, hot: t.num === 6 || t.num === 8, dots: t.num ? 6 - Math.abs(7 - t.num) : 0, dim: t.id === st.ash })),
         roads: edges.filter((e) => e.owner).map((e) => ({ x1: r2(verts[e.v[0]].x), y1: r2(verts[e.v[0]].y), x2: r2(verts[e.v[1]].x), y2: r2(verts[e.v[1]].y), color: color(e.owner) })),
         buildings: verts.filter((v) => v.owner).map((v) => ({ x: r2(v.x), y: r2(v.y), color: color(v.owner), kind: v.kind === 'light' ? 'tower' : 'hut', art: v.kind })),
         harbors: board.harbors.map((h) => ({ x: r2(h.x), y: r2(h.y), label: h.kind === 'any' ? '3:1' : `2:1${RINFO[h.kind].icon}`, art: h.kind })),
