@@ -681,8 +681,11 @@ export function drawTrail(g, x1, y1, x2, y2, c, k) {
   g.restore();
 }
 
-/** A little sailboat at a harbor with a sign under it: '3:1', or '2:1' plus a resource icon. */
-export function drawBoat(g, x, y, s, kind, t = 0) {
+/**
+ * A little sailboat at a harbor with a sign under it: '3:1', or '2:1' plus a resource icon.
+ * `sign` scales the sign alone (the TV makes it bigger so it reads from the couch).
+ */
+export function drawBoat(g, x, y, s, kind, t = 0, sign = 1) {
   const bob = Math.sin(t * 2 + x) * s * 0.06;
   g.save();
   g.translate(x, y + bob);
@@ -717,6 +720,8 @@ export function drawBoat(g, x, y, s, kind, t = 0) {
   if (kind == null) return; // just the boat
   const text = kind === 'any' ? '3:1' : '2:1';
   g.save();
+  y += s * 0.5 * (1 - sign); // keep the sign's top just under the hull
+  s *= sign;
   g.font = `900 ${Math.round(s * 0.38)}px system-ui, sans-serif`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
