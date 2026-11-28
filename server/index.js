@@ -135,6 +135,31 @@ function notFound(res) {
   res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
 }
 
+// A phone that opens https://<address>:<port>/ (a browser's "always use secure connections" or
+// HTTPS-Only mode, or a link someone retyped) sends a TLS handshake to this plain-HTTP port.
+// It can't be answered without a certificate, and every phone would warn about a self-signed
+// one, so the phone just sees an error. Spot it instead and tell the TV, so the room knows
+// what's wrong and how to fix it. Browsers retry, so once per address every half minute.
+const httpsTried = new Map(); // address -> last time told
+const HTTPS_NOTICE_MS = 30_000;
+server.on('clientError', (err, socket) => {
+  const tls = err.rawPacket?.[0] === 0x16 && err.rawPacket?.[1] === 0x03; // TLS handshake record
+  if (tls) {
+    const addr = String(socket.remoteAddress ?? '?').replace(/^::ffff:/, '');
+    const now = Date.now();
+    if (now - (httpsTried.get(addr) ?? 0) > HTTPS_NOTICE_MS) {
+      httpsTried.set(addr, now);
+      if (httpsTried.size > 100) httpsTried.clear();
+      log.warn('http', `${addr} tried https:// on the http port; the phone needs http:// (or "Continue to site")`);
+      broadcastTv({ t: 'httpsTried' });
+    }
+    return socket.destroy();
+  }
+  // What Node does without this listener: a plain 400 for a malformed request.
+  if (socket.writable && err.code !== 'ECONNRESET') socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+  else socket.destroy();
+});
+
 // ---------------------------------------------------------------------------
 // WebSockets
 //   client -> server  {t:'hello', role:'tv'}
@@ -152,6 +177,7 @@ function notFound(res) {
 //   server -> tv      {t:'state', gameId, data, pads}       game snapshot, up to TICK_HZ (unchanged ones are skipped,
 //                                                           with a repeat every TV_KEEPALIVE_MS); pads = buttons held
 //   server -> tv      {t:'net', tickHz, tickMaxMs, players}  latency stats, 1/s (the TV's L overlay)
+//   server -> tv      {t:'httpsTried'}                      a phone opened https:// on this http port (TV explains the fix)
 //   server -> any     {t:'pong', at} | {t:'error', message}
 // ---------------------------------------------------------------------------
 // Small, frequent messages: no compression (it costs CPU and adds delay). ws already turns off

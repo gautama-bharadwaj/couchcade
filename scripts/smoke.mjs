@@ -12,6 +12,7 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import net from 'node:net';
+import tls from 'node:tls';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -166,6 +167,14 @@ async function main() {
   const phase = await next;
   ok(phase.phase === 'lobby' && phase.games.length > 0, 'TV websocket gets the lobby');
   ok(phase.tabs?.length > 0 && phase.games.every((g) => phase.tabs.some((t) => t.id === g.tab)), 'every game is in a picker tab');
+
+  // A phone opening https:// on the http port: the TV is told so it can explain the fix.
+  next = tv.next('httpsTried');
+  const secure = tls.connect({ port, host: '127.0.0.1', rejectUnauthorized: false });
+  secure.on('error', () => {});
+  ok(await Promise.race([next.then(() => true), sleep(5000).then(() => false)]), 'an https:// attempt tells the TV');
+  secure.destroy();
+  ok((await get(port, '/')).status === 200, 'plain http still works after it');
 
   const phone = await wsClient(port);
   next = phone.next('welcome');

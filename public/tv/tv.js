@@ -82,6 +82,8 @@ function connect() {
       onPhase(msg);
     } else if (msg.t === 'net') {
       net = msg;
+    } else if (msg.t === 'httpsTried') {
+      showHttpsHelp();
     } else if (msg.t === 'pong') {
       pingMs = Math.round(performance.now() - msg.at);
     }
@@ -420,6 +422,15 @@ function showToast(text) {
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// A phone opened https:// (see the server's clientError). Explain it for long enough to read.
+let httpsTimer = 0;
+function showHttpsHelp() {
+  $('httpsUrl').textContent = joinUrl;
+  $('httpsHelp').classList.add('show');
+  clearTimeout(httpsTimer);
+  httpsTimer = setTimeout(() => $('httpsHelp').classList.remove('show'), 15_000);
 }
 
 // --- Keys --------------------------------------------------------------------------
